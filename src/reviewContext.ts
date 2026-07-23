@@ -205,6 +205,62 @@ export function formatReviewContext(ctx: ReviewContext): string {
   );
   parts.push("");
 
+  parts.push("## 🏗️ Test Automation Framework Layering (apply where relevant for Playwright/Appium projects)");
+  parts.push(
+    "This repo prefers a clear separation of concerns across the automation layers. These are judgment calls, " +
+      "not blanket blockers — apply whichever are relevant to the frameworks touched by this diff, and weigh " +
+      "severity based on how far the new code strays from the existing pattern in that class:\n" +
+      "\n" +
+      "**Playwright — `WebAction` (or equivalently-named low-level action class)**\n" +
+      "- WARNING (SUGGESTION if minor/borderline): `WebAction` (and equivalent low-level driver-wrapper classes) " +
+      "should contain only raw Playwright/browser actions (click, type, hover, wait, navigate, evaluate, locator " +
+      "helpers, etc.) — not business logic (e.g. computing expected values, branching on domain-specific state) " +
+      "or validations/assertions. If a new/modified `WebAction` method embeds an assertion (assertThat, Assert.*, " +
+      "throwing on a business condition) or domain-specific conditional logic, flag it — that logic belongs in a " +
+      "page object or step definition instead.\n" +
+      "- Before flagging any brand-new method added to `WebAction`/`MobileAction` (or a page/screen object), first " +
+      "check whether it duplicates existing behavior: search the class (and sibling classes) for a method that " +
+      "already does the same or near-same action, differing only in a literal (a selector, a wait time, a string " +
+      "argument, a boolean flag). If an existing method could achieve the same result by adding/adjusting a " +
+      "parameter, prefer a SUGGESTION to parameterize and reuse the existing method over introducing a new one — " +
+      "don't treat this as an automatic BLOCKER, just call out the duplication/parameterization opportunity with " +
+      "the specific existing method it overlaps with.\n" +
+      "- BLOCKER: Playwright (`Playwright.create()`/browser/context launch) must be initialized exactly once, in " +
+      "hooks (e.g. `Hooks.java`/`@Before`/`@BeforeAll` or equivalent global setup), not re-initialized inside page " +
+      "objects, step definitions, or per-scenario helper code. Grep for additional `Playwright.create()` / " +
+      "`.launch(`/browser-context-creation call sites outside the hooks file when a diff touches Playwright " +
+      "bootstrap code, and flag any duplicate initialization path.\n" +
+      "\n" +
+      "**Appium — `MobileAction` (or equivalently-named low-level action class)**\n" +
+      "- WARNING (SUGGESTION if minor/borderline): `MobileAction` should contain only raw Appium/mobile-driver or " +
+      "screen actions (tap, swipe, scroll, wait, find element, etc.) — not business logic or validations/" +
+      "assertions embedded directly in the action method. Same standard as `WebAction` above, applied to the " +
+      "mobile stack, including the same duplicate/parameterization check before flagging a new method as a " +
+      "layering violation.\n" +
+      "\n" +
+      "**Validations Placement**\n" +
+      "- SUGGESTION/WARNING: validations/assertions are preferred in page objects or screen objects (not in the " +
+      "low-level action class, and not buried inline in step definitions). If a new assertion is added directly " +
+      "in `WebAction`/`MobileAction` or inline in a step definition instead of a page/screen object method, flag " +
+      "it as misplaced.\n" +
+      "\n" +
+      "**Step Definitions**\n" +
+      "- SUGGESTION/WARNING: step definition classes should ideally contain only bindings (Gherkin step string → " +
+      "page/screen object method call), not business logic, validations, or direct low-level action calls. A step " +
+      "definition method with more than a thin call-through to a page/screen object (e.g. inline conditionals, " +
+      "direct `WebAction`/`MobileAction` calls, inline assertions) is a candidate for refactor — flag as SUGGESTION " +
+      "unless the complexity is trivial.\n" +
+      "\n" +
+      "**Locator Strategy**\n" +
+      "- SUGGESTION: locators should preferably target `id`, `class name`, or another stable attribute name rather " +
+      "than fragile strategies (long/brittle CSS or XPath chains, text-based locators prone to i18n/copy changes, " +
+      "positional/index-based selectors). If a new locator in this diff uses a fragile strategy where an id/class/" +
+      "attribute-based alternative is plausible, flag it — unless the file's own comments already acknowledge the " +
+      "limitation (e.g. \"no stable id found, prefer one if it appears later\"), in which case treat it as already " +
+      "self-documented and only a minor note."
+  );
+  parts.push("");
+
   if (ctx.outOfScopeFiles.length > 0) {
     parts.push("## ⚠️ Potential Scope Creep Detected");
     parts.push(
