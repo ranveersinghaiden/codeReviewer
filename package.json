@@ -1,0 +1,26 @@
+{
+  "name": "code-reviewer-mcp",
+  "version": "0.3.2",
+  "description": "Read-only MCP server that checks out a GitHub PR locally into a disposable worktree and gathers deep review context (full changed-file content, module scope, matching review-skill/instruction docs) for an LLM code reviewer. Never executes PR code and never posts to GitHub.",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "code-reviewer-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
