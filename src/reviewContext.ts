@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { PrMeta, PrReview } from "./github.js";
+import type { PrMeta, PrReview, PrCommit } from "./github.js";
 import { classifyChangedFiles, detectOutOfScopeFiles, type FileClassification } from "./scope.js";
 
 export interface FileContext {
@@ -24,6 +24,7 @@ export interface ReviewContext {
   repoInstructions: SkillDoc[];
   priorReviews: PrReview[];
   isAutofixPr: boolean;
+  commitsSincePriorReviews: PrCommit[];
 }
 
 const MAX_FILE_CHARS = 60_000;
@@ -56,7 +57,8 @@ export async function gatherReviewContext(
   worktreePath: string,
   meta: PrMeta,
   diff: string,
-  priorReviews: PrReview[] = []
+  priorReviews: PrReview[] = [],
+  commits: PrCommit[] = []
 ): Promise<ReviewContext> {
   const changedPaths = meta.files.map((f) => f.path);
   const classifications = classifyChangedFiles(changedPaths);
@@ -92,7 +94,27 @@ export async function gatherReviewContext(
     ),
   ]);
 
-  return { meta, diff, changedFiles, outOfScopeFiles, skills, repoInstructions, priorReviews, isAutofixPr };
+  // Determine, per prior review, whether any commit landed AFTER it was submitted —
+  // that tells the reviewer whether the PR has changed since that review and thus
+  // whether the review's findings might already be stale/addressed (or not yet reviewed at all).
+  const latestReviewTime = priorReviews.length
+    ? Math.max(...priorReviews.map((r) => (r.submittedAt ? Date.parse(r.submittedAt) : 0)))
+    : 0;
+  const commitsSincePriorReviews = commits.filter(
+    (c) => c.committedDate && Date.parse(c.committedDate) > latestReviewTime
+  );
+
+  return {
+    meta,
+    diff,
+    changedFiles,
+    outOfScopeFiles,
+    skills,
+    repoInstructions,
+    priorReviews,
+    isAutofixPr,
+    commitsSincePriorReviews,
+  };
 }
 
 /** Serializes the review context into a single markdown/text bundle for an LLM reviewer to consume. */
@@ -115,6 +137,26 @@ export function formatReviewContext(ctx: ReviewContext): string {
     );
     if (unresolved.length > 0) {
       parts.push(`**${unresolved.length} unresolved CHANGES_REQUESTED review(s) found:**`);
+    }
+    if (ctx.commitsSincePriorReviews.length > 0) {
+      parts.push(
+        `**${ctx.commitsSincePriorReviews.length} commit(s) landed AFTER the most recent prior review** — the PR has changed since it was last reviewed:`
+      );
+      for (const c of ctx.commitsSincePriorReviews) {
+        parts.push(`- \`${c.sha.slice(0, 7)}\` (${c.committedDate}) — ${c.message}`);
+      }
+      parts.push(
+        "Re-review the diff against these new commits specifically: confirm each prior finding this PR " +
+          "claims to address is actually fixed by one of the commits above (don't take the claim at face value), " +
+          "and check whether these new commits introduce any NEW issues of their own that a prior review " +
+          "wouldn't have seen."
+      );
+    } else {
+      parts.push(
+        "**No commits have landed since the most recent prior review** — this PR's code is unchanged since " +
+          "it was last reviewed. Any prior review comment still visible on GitHub (not superseded by a later " +
+          "commit) should be treated as still live/unresolved, not stale — do not assume it was silently fixed."
+      );
     }
     for (const r of ctx.priorReviews) {
       parts.push(`### ${r.author} — ${r.state} (${r.submittedAt})`);

@@ -35,18 +35,26 @@ the tool surfaces and apply them to the live diff and full file content.
    BLOCKERS/WARNINGS/SUGGESTIONS) → stop and wait. Only post via `gh api
    .../pulls/<n>/reviews` or `gh pr review` after the user says "post it" /
    "add the review" / equivalent for *that specific PR*.
-3. **Always check prior reviews first.** Call `gather_review_context` (which
-   fetches `gh api .../pulls/<n>/reviews` and PR labels) before forming a
-   verdict. Never post APPROVE over an unresolved human `CHANGES_REQUESTED`.
-   If the PR is labeled `AI_AUTOFIX*`, require live verification evidence
-   (a linked passing manual/Cucumber run), not just a clean diff — a clean
-   static diff is not proof the affected scenario executes.
+3. **Always check prior reviews first, and whether the PR has changed since.**
+   `gather_review_context` fetches `gh api .../pulls/<n>/reviews` AND
+   `.../pulls/<n>/commits`, and tells you how many commits landed AFTER the
+   most recent prior review. If zero, the PR is unchanged since last review —
+   any prior comment still visible is still live, not stale, don't assume
+   it was silently fixed. If one or more, treat the diff as re-review-worthy:
+   verify each fix the PR claims against those specific commits (don't take
+   the claim at face value), and check the new commits themselves for fresh
+   issues a prior pass wouldn't have seen. Never post APPROVE over an
+   unresolved human `CHANGES_REQUESTED`. If the PR is labeled `AI_AUTOFIX*`,
+   require live verification evidence (a linked passing manual/Cucumber
+   run), not just a clean diff — a clean static diff is not proof the
+   affected scenario executes.
 4. **A bot/human review comment's mere presence does not mean the issue is
-   unresolved.** GitHub review comments persist visually forever unless
-   manually resolved. Before treating an old comment as a live BLOCKER,
-   check the fix commit's timestamp (`gh api .../pulls/<n>/commits`) against
-   the comment's `created_at` — if the fix commit is *after* the comment,
-   it's stale, not missed.
+   unresolved — but absence of a new commit since it was posted means it's
+   still live.** GitHub review comments persist visually forever unless
+   manually resolved. Before treating an old comment as resolved/stale,
+   confirm a commit landed *after* the comment's `created_at` (the tool
+   surfaces this automatically per rule 3) — if no such commit exists,
+   the comment is still an open issue, not stale.
 5. **Read every changed file's full content, not just the diff hunk**, for
    files flagged as protected/framework files (`pom.xml`, CI workflow YAML,
    `Hooks.java`, `Constants.java`, runner classes, etc.) or when a rule
@@ -54,6 +62,14 @@ the tool surfaces and apply them to the live diff and full file content.
 6. **Explicitly enumerate every protected/framework file individually** in
    the report when the repo's own rules require human approval for such
    changes — don't summarize "7 pom.xml files changed" as one bullet.
+7. **Re-fetch comments/commits immediately before finalizing the report, not
+   only at the start.** Bot/human comments can land mid-review (observed:
+   a bot comment posted 18 seconds after the PR's last commit, arriving
+   after this agent had already snapshotted the comment list and missed
+   it). For any PR open long enough to require real reading/verification
+   time, re-run the comment+commit fetch right before composing the final
+   verdict and diff it against the initial snapshot — treat any newly
+   appeared comment as unverified and check it before presenting the report.
 
 ## Mandatory Checklists (apply on every review)
 
@@ -88,6 +104,20 @@ the tool surfaces and apply them to the live diff and full file content.
   POSIX-only script) needs a documented, discoverable skip/opt-out for
   platforms lacking it (e.g. native Windows without WSL/git-bash) — a code
   comment alone doesn't count as "documented."
+- **Maven multi-module lifecycle-binding duplication**: when a `pom.xml`
+  change adds/wires a plugin execution (e.g. `exec-maven-plugin`,
+  `maven-antrun-plugin`) bound to an early, always-run phase
+  (`validate`/`initialize`/`generate-sources`) and the *same* binding
+  (same `<id>`/goal) is copy-pasted into multiple sibling module `pom.xml`
+  files in one PR, grep the whole repo for that execution `<id>` across all
+  poms. If it's duplicated across ≥2 modules that participate in the same
+  reactor build (a root/parent `mvn clean install` from repo root touches
+  all of them), flag a WARNING: the step will re-run once per wired module
+  (redundant network calls, repeated overwrite of any shared output
+  directory, multiplied chance of transient failure). Suggest moving the
+  execution to the root pom with `<inherited>false</inherited>`, or making
+  the underlying script idempotent (skip if already synced to the target
+  version), before treating it as done.
 
 ### Test Automation Framework Layering (Playwright/Appium)
 - **`WebAction` (Playwright) / `MobileAction` (Appium)**: these low-level
@@ -137,6 +167,9 @@ the tool surfaces and apply them to the live diff and full file content.
    timestamps before treating it as live.
 4. For workflow YAML changes, manually trace full job step order; for
    path-arithmetic changes, verify by resolving the actual literal.
+4a. Immediately before composing the final report, re-fetch comments and
+   commits one more time and diff against the initial snapshot (see Hard
+   Rule 7) — check any newly landed comment before finalizing.
 5. Compose the report: **Verdict** (APPROVED / APPROVED WITH COMMENTS /
    CHANGES REQUESTED) + BLOCKERS + WARNINGS + SUGGESTIONS, each with
    file:line and a concrete fix suggestion.
@@ -161,3 +194,11 @@ the tool surfaces and apply them to the live diff and full file content.
 - The `edit` tool's string match can silently fail on large/duplicated
   multi-line blocks — fall back to a small Python `str.replace()` script via
   `bash` when that happens.
+- A bot review comment can land seconds after the PR's last commit, after
+  this agent has already snapshotted comments/commits for review — always
+  re-check right before finalizing (see Hard Rule 7), don't trust a single
+  snapshot taken at the start of a long review.
+- Duplicated Maven plugin executions across sibling modules (same `<id>`,
+  same early phase) in one PR is an easy miss on a first pass since each
+  `pom.xml` diff hunk looks correct in isolation — only shows up when
+  grepping the execution `<id>` across all modules at once.

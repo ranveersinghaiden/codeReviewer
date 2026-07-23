@@ -116,6 +116,41 @@ export async function fetchPrReviews(owner, repo, prNumber) {
         body: r.body ?? "",
     }));
 }
+/** Fetches all commits on the PR (chronological), used to tell whether prior reviews are stale. */
+export async function fetchPrCommits(owner, repo, prNumber) {
+    const stdout = await run("gh", [
+        "api",
+        `repos/${owner}/${repo}/pulls/${prNumber}/commits`,
+        "--paginate",
+    ]);
+    const commits = [];
+    let rest = stdout.trim();
+    while (rest.length > 0) {
+        let depth = 0;
+        let end = -1;
+        for (let i = 0; i < rest.length; i++) {
+            if (rest[i] === "[")
+                depth++;
+            else if (rest[i] === "]") {
+                depth--;
+                if (depth === 0) {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if (end === -1)
+            break;
+        const chunk = JSON.parse(rest.slice(0, end + 1));
+        commits.push(...chunk);
+        rest = rest.slice(end + 1).trim();
+    }
+    return commits.map((c) => ({
+        sha: c.sha,
+        committedDate: c.commit?.committer?.date ?? c.commit?.author?.date ?? "",
+        message: (c.commit?.message ?? "").split("\n")[0],
+    }));
+}
 // NOTE: This server is intentionally read-only — it has no function to post
 // reviews, comments, or any other write action to GitHub. Fetching PR
 // metadata/diff and checking the PR out locally (read-only worktree) are the

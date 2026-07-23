@@ -25,6 +25,12 @@ export interface PrReview {
   body: string;
 }
 
+export interface PrCommit {
+  sha: string;
+  committedDate: string;
+  message: string;
+}
+
 async function run(cmd: string, args: string[], cwd?: string): Promise<string> {
   const { stdout } = await execFileAsync(cmd, args, {
     cwd,
@@ -154,6 +160,44 @@ export async function fetchPrReviews(
     state: r.state,
     submittedAt: r.submitted_at ?? "",
     body: r.body ?? "",
+  }));
+}
+
+/** Fetches all commits on the PR (chronological), used to tell whether prior reviews are stale. */
+export async function fetchPrCommits(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<PrCommit[]> {
+  const stdout = await run("gh", [
+    "api",
+    `repos/${owner}/${repo}/pulls/${prNumber}/commits`,
+    "--paginate",
+  ]);
+  const commits: any[] = [];
+  let rest = stdout.trim();
+  while (rest.length > 0) {
+    let depth = 0;
+    let end = -1;
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "[") depth++;
+      else if (rest[i] === "]") {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end === -1) break;
+    const chunk = JSON.parse(rest.slice(0, end + 1));
+    commits.push(...chunk);
+    rest = rest.slice(end + 1).trim();
+  }
+  return commits.map((c) => ({
+    sha: c.sha,
+    committedDate: c.commit?.committer?.date ?? c.commit?.author?.date ?? "",
+    message: (c.commit?.message ?? "").split("\n")[0],
   }));
 }
 
