@@ -1,0 +1,15 @@
+export const typescriptRules = [
+    "Never use `any` unless justified with a comment; prefer `unknown` + narrowing.",
+    "Enable/keep `strict` and `strictNullChecks` in tsconfig; don't suppress with @ts-ignore without an explanation.",
+    "Use camelCase for variables/functions, PascalCase for types/interfaces/classes/enums, UPPER_CASE for true constants.",
+    "Prefix booleans with is/has/can/should for clarity.",
+    "Validate external/untrusted data (API responses, user input) at runtime (e.g., zod) rather than trusting types alone.",
+    "Handle all Promise rejections; no floating/unawaited promises, no empty .catch().",
+    "Give async functions explicit return types (Promise<T>), avoid implicit any returns.",
+    "Prefer discriminated unions/Result-like types over throwing for expected/domain errors.",
+    "Avoid unchecked type assertions (`as T`) on unvalidated data.",
+    "Don't leak internal implementation types across module boundaries.",
+    "Remove dead code, leftover console.log/debugger statements, and TODOs before merging.",
+    "Prefer optional chaining (?.) and nullish coalescing (??) over verbose null checks.",
+    "No hard-coded secrets/API keys; use environment variables.",
+];

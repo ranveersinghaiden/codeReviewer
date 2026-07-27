@@ -1,0 +1,15 @@
+export const javaRules = [
+    "Follow Java naming conventions: PascalCase classes, camelCase methods/variables, UPPER_CASE constants.",
+    "Favor composition over inheritance; prefer interfaces to abstract classes where reasonable; keep methods/classes SRP-focused.",
+    "Never swallow exceptions with an empty catch block; catch specific exception types, not generic Exception/Throwable.",
+    "Preserve the cause when rethrowing exceptions (`throw new XException(msg, cause)`).",
+    "Use try-with-resources for anything Closeable (streams, connections, files).",
+    "Always override `equals` and `hashCode` together and consistently.",
+    "Return empty collections/Optional instead of null from public APIs.",
+    "Don't modify a collection while iterating over it (avoid ConcurrentModificationException).",
+    "Use StringBuilder for string concatenation in loops, not `+`.",
+    "Use PreparedStatement (never string-concatenated SQL) to avoid SQL injection.",
+    "No hard-coded secrets/passwords; avoid logging sensitive data.",
+    "Review concurrency: prefer thread-safe collections and java.util.concurrent utilities (ExecutorService) over raw Thread/synchronized where possible; watch for shared mutable state.",
+    "Avoid raw generic types; use parameterized generics correctly.",
+];

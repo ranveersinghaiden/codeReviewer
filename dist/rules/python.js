@@ -1,0 +1,15 @@
+export const pythonRules = [
+    "Follow PEP 8: 4-space indentation, snake_case for functions/variables, PascalCase for classes, UPPER_CASE for constants.",
+    "Keep lines within the project's configured limit (79 PEP8 / 88 Black); group imports stdlib/third-party/local.",
+    "Use type hints on public function signatures; avoid `Any` without justification; use `T | None` (3.10+) over `Optional[T]`.",
+    "Run/expect mypy or pyright cleanliness for changed code.",
+    "Never use a bare `except:`; catch specific exceptions and use `raise ... from ...` to preserve context.",
+    "No silent `except: pass`; log or handle meaningfully via the `logging` module, not `print`.",
+    "Avoid mutable default arguments (e.g., `def f(x=[])`).",
+    "No magic numbers; use named constants.",
+    "Keep functions/classes small and single-purpose; avoid deep nesting.",
+    "Use docstrings for public modules/classes/functions.",
+    "Prefer f-strings over % formatting or str.format().",
+    "Watch for security issues: eval/exec on untrusted input, shell=True with unsanitized input, insecure deserialization (pickle) of untrusted data.",
+    "Ensure resources (files, sockets, connections) are managed with context managers.",
+];
