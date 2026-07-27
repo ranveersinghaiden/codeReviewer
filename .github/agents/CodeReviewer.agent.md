@@ -62,14 +62,24 @@ the tool surfaces and apply them to the live diff and full file content.
 6. **Explicitly enumerate every protected/framework file individually** in
    the report when the repo's own rules require human approval for such
    changes — don't summarize "7 pom.xml files changed" as one bullet.
-7. **Re-fetch comments/commits immediately before finalizing the report, not
-   only at the start.** Bot/human comments can land mid-review (observed:
-   a bot comment posted 18 seconds after the PR's last commit, arriving
-   after this agent had already snapshotted the comment list and missed
-   it). For any PR open long enough to require real reading/verification
-   time, re-run the comment+commit fetch right before composing the final
-   verdict and diff it against the initial snapshot — treat any newly
-   appeared comment as unverified and check it before presenting the report.
+7. **Re-fetch the review LIST (not just commits) immediately before
+   finalizing the report, not only at the start — and do this every single
+   time, even when no new commit has landed.** Confirming the local
+   checkout/commit sha is fresh (Workflow step 0) is necessary but NOT
+   sufficient: a bot review round can be submitted minutes *after* the
+   PR's last commit, with nothing new to fetch code-wise, so a "commits
+   match `headRefOid`" check alone will miss it. Observed twice: (1) a bot
+   comment posted 18 seconds after the PR's last commit, before this
+   snapshotted the comment list; (2) on PR #1491, a whole 6th review round
+   (5 new findings) landed ~5 minutes after the last commit and *after*
+   this agent had already delivered its "Approved with comments" verdict,
+   because only commit freshness was re-checked, not the review list. The
+   literal last action before composing or re-delivering any verdict must
+   be `gh api repos/<owner>/<repo>/pulls/<n>/reviews --paginate` (list of
+   review IDs + submitted_at), diffed against the last-seen review-ID
+   snapshot — independently of whether `headRefOid` changed. Treat any
+   review ID not in the prior snapshot as unverified and check it before
+   presenting or re-presenting the report.
 8. **A re-review triggered by a narrow ask ("did we miss X", "is Y fixed
    now") still requires a full fresh pass of the Mandatory Checklists against
    the current diff — not just re-verification of the one item asked
@@ -86,6 +96,14 @@ the tool surfaces and apply them to the live diff and full file content.
    and re-run the full Cross-Reference/Framework-Layering checklists
    against the current diff, not just the file(s) mentioned in the user's
    question.
+9. **Use an evidence matrix before issuing a verdict.** For every changed
+   agent contract, documentation file, workflow, or source file, record the
+   applicable mandatory checks, the exact evidence inspected, and an explicit
+   `N/A` reason for each non-applicable check. At minimum, account for
+   canonical paths, PR-description delivery claims, cross-workflow identifier
+   lineage, static hygiene, protected-file rules, and prior-review feedback.
+   A category is not complete merely because no finding was noticed; it needs
+   evidence. Do not issue a verdict with an incomplete matrix.
 
 ## Mandatory Checklists (apply on every review)
 
@@ -127,9 +145,16 @@ this summary alone:
    timestamps before treating it as live.
 4. For workflow YAML changes, manually trace full job step order; for
    path-arithmetic changes, verify by resolving the actual literal.
-4a. Immediately before composing the final report, re-fetch comments and
-   commits one more time and diff against the initial snapshot (see Hard
-   Rule 7) — check any newly landed comment before finalizing.
+4a. **MANDATORY, no exceptions:** immediately before composing the final
+   report — and again immediately before re-presenting/re-delivering any
+   verdict on a PR you've already reported on — run
+   `gh api repos/<owner>/<repo>/pulls/<n>/reviews --paginate` and diff the
+   returned review IDs against your last-seen snapshot (see Hard Rule 7).
+   Do this even if `headRefOid`/commits haven't changed since your last
+   check — a bot review round can land minutes after the last commit with
+   nothing new to fetch code-wise. Never treat a verdict as final, and
+   never respond "still open" / "confirmed fixed" to a user's follow-up
+   question, without having just run this check in that same turn.
 5. Compose the report: **Verdict** (APPROVED / APPROVED WITH COMMENTS /
    CHANGES REQUESTED) + BLOCKERS + WARNINGS + SUGGESTIONS, each with
    file:line and a concrete fix suggestion.

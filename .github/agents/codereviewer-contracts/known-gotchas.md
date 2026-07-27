@@ -4,6 +4,41 @@ Referenced from `CodeReviewer.agent.md`. Read before starting any review —
 these are concrete misses caught in prior sessions, each with the fix that
 prevents recurrence.
 
+- **Reviewing contracts as prose instead of executable routing rules.**
+  Observed on PR #1491: an agent contract sent MyEROAD work to
+  `myeroad/ui-tests`, while the product map and root Maven build named
+  `myeroad/myeroad-e2e-tests` as the canonical module. The contract looked
+  plausible in isolation but would route generated work to the wrong place.
+  Fix: create the canonical-path validation matrix required by the
+  Cross-Reference Checklist for every changed instruction path.
+- **Checking telemetry keys locally rather than tracing their lineage.**
+  Observed on PR #1491: BDD/code workflows used a Jira-derived task ID while
+  autofix constructed an `i360-source` ID, contradicting the PR’s claimed
+  end-to-end correlation. Fix: produce the required cross-workflow identifier
+  lineage table, including fallbacks, retry paths, and autofix paths; formats
+  must agree or a correlation boundary must be explicit.
+- **Trusting PR prose or an old resolved comment instead of the final diff.**
+  Observed on PR #1491: the description claimed to add `extract_context.py`,
+  but no final-diff file delivered it. Fix: reconcile concrete PR claims with
+  `git diff --name-status base...head` on every final pass.
+- **Treating an import-level lint issue as too trivial to inspect.** Observed
+  on PR #1491: `re` was unused in changed Python code. Fix: include changed
+  imports and parameters in the evidence matrix; report actual unused items
+  at SUGGESTION severity unless repository lint policy says otherwise.
+- **Checking commit freshness but not review-list freshness before
+  finalizing/re-delivering a verdict.** Observed on PR #1491: this agent
+  re-synced the local checkout, confirmed `headRefOid` matched, and
+  delivered "Approved with comments." A 6th bot review round (5 new
+  findings: unused-param lint, two dangling instruction-file references,
+  a skipped numbering sequence, a data-quality typo) landed ~5 minutes
+  *after* the last commit — so commit freshness was fine, but the review
+  list was stale, and the verdict was already delivered before that round
+  existed. "No new commits" is not the same signal as "no new comments."
+  Fix: Workflow step 4a now mandates re-running
+  `gh api .../pulls/<n>/reviews --paginate` and diffing review IDs against
+  the last-seen snapshot as the literal last action before composing OR
+  re-presenting any verdict — independent of commit/headRefOid state, and
+  even when the user's follow-up question doesn't mention new comments.
 - **Narrowing a re-review to only the user's named concern instead of
   running a full fresh checklist pass.** Observed on PR #1491: asked to
   confirm one specific fix (knowledge-dir restoration), this agent verified

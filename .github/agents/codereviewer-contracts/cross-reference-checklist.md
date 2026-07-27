@@ -11,6 +11,32 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
 - **Docs vs. actual code/script behavior**: a doc's usage example must match
   the script's real env-var/flag names. A doc's referenced path must
   actually exist (`ls`/`find`, don't assume).
+- **Canonical module paths in agent contracts and docs**: for every changed
+  repository path that directs an implementation agent where to work, make a
+  path-validation matrix: `literal instruction path -> authoritative product
+  map/architecture source -> resolved directory -> owning root build module`.
+  A literal must agree with all applicable sources. Do not infer an alias from
+  a similarly named directory; flag a mismatch as a WARNING when it can send
+  generated work to the wrong module.
+- **PR-description delivery claims**: compare every concrete deliverable
+  named in the PR description (new scripts, workflows, contracts, tests, or
+  data files) with `git diff --name-status base...head`. A claimed addition
+  that is absent from the final diff must be called out, even if a prior
+  inline comment referring to it was resolved. If it is pre-existing or was
+  deliberately removed, require the PR description to say so.
+- **Cross-workflow identifier lineage**: when changed workflows claim to
+  correlate, route, resume, or audit the same work item, trace each
+  identifier end-to-end in a table: `stage -> variable/key -> produced
+  format -> consumed format -> fallback -> semantic owner`. Compare every
+  producer and consumer across all affected workflows, including retry and
+  autofix workflows. A fallback or independently generated ID that breaks
+  the claimed correlation is a WARNING unless the workflow explicitly starts
+  a new correlation boundary.
+- **Static hygiene in changed source**: inspect changed imports and function
+  parameters for local uses before finalizing. Report unused imports or
+  parameters as a SUGGESTION unless the repository’s enforced lint
+  configuration elevates them. Do not let a low-severity hygiene finding
+  substitute for the cross-reference checks above.
 - **Untrusted input reaching a shell**: any `${{ inputs.* }}` /
   `${{ github.event.* }}` / `${{ steps.*.outputs.* }}` value that originates
   from a workflow_dispatch input or PR-controlled data, interpolated
