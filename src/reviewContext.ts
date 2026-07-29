@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { PrMeta, PrReview, PrCommit } from "./github.js";
+import type { PrMeta, PrReview, PrReviewComment, PrCommit } from "./github.js";
 import { classifyChangedFiles, detectOutOfScopeFiles, type FileClassification } from "./scope.js";
 
 export interface FileContext {
@@ -23,6 +23,7 @@ export interface ReviewContext {
   skills: SkillDoc[];
   repoInstructions: SkillDoc[];
   priorReviews: PrReview[];
+  priorReviewComments: PrReviewComment[];
   isAutofixPr: boolean;
   commitsSincePriorReviews: PrCommit[];
 }
@@ -58,6 +59,7 @@ export async function gatherReviewContext(
   meta: PrMeta,
   diff: string,
   priorReviews: PrReview[] = [],
+  priorReviewComments: PrReviewComment[] = [],
   commits: PrCommit[] = []
 ): Promise<ReviewContext> {
   const changedPaths = meta.files.map((f) => f.path);
@@ -112,6 +114,7 @@ export async function gatherReviewContext(
     skills,
     repoInstructions,
     priorReviews,
+    priorReviewComments,
     isAutofixPr,
     commitsSincePriorReviews,
   };
@@ -168,6 +171,31 @@ export function formatReviewContext(ctx: ReviewContext): string {
     parts.push("(none found — this is the first review on this PR)");
     parts.push("");
   }
+
+  parts.push("## Mandatory Prior-Feedback Matrix");
+  parts.push(
+    "Every row below MUST appear in the final review report with a disposition of **Open**, **Fixed**, " +
+      "or **Not applicable**. A row may be marked **Fixed** only after inspecting the current source and " +
+      "identifying a commit dated after the comment. Do not infer a disposition from a PR reply, commit title, " +
+      "or review-summary text. If no commit landed after the comment, it remains **Open**."
+  );
+  parts.push("");
+  if (ctx.priorReviewComments.length === 0) {
+    parts.push("(no inline review comments found)");
+  } else {
+    parts.push("| Comment | Author | Location | Created | Required final-report disposition |");
+    parts.push("| --- | --- | --- | --- | --- |");
+    for (const comment of ctx.priorReviewComments) {
+      const location = comment.path
+        ? `\`${comment.path}${comment.line === null ? "" : `:${comment.line}`}\``
+        : "(general)";
+      const body = comment.body.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+      parts.push(
+        `| \`${comment.id}\` — ${body} | ${comment.author} | ${location} | ${comment.createdAt} | **UNVERIFIED** |`
+      );
+    }
+  }
+  parts.push("");
 
   if (ctx.isAutofixPr) {
     parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");

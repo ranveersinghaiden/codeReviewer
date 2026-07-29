@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { ensureGhAvailable, fetchPrMeta, fetchPrDiff, fetchPrReviews, fetchPrCommits } from "./github.js";
+import { ensureGhAvailable, fetchPrMeta, fetchPrDiff, fetchPrReviews, fetchPrReviewComments, fetchPrCommits, } from "./github.js";
 import { checkoutPrWorktree, cleanupWorktree } from "./worktree.js";
 import { loadInstructions, formatInstructionsContext } from "./instructions.js";
 import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";
@@ -67,8 +67,11 @@ server.registerTool("gather_review_context", {
     try {
         const diff = await fetchPrDiff(owner, repo, pr_number);
         const priorReviews = await fetchPrReviews(owner, repo, pr_number);
-        const commits = await fetchPrCommits(owner, repo, pr_number);
-        const ctx = await gatherReviewContext(checkout.worktreePath, meta, diff, priorReviews, commits);
+        const [priorReviewComments, commits] = await Promise.all([
+            fetchPrReviewComments(owner, repo, pr_number),
+            fetchPrCommits(owner, repo, pr_number),
+        ]);
+        const ctx = await gatherReviewContext(checkout.worktreePath, meta, diff, priorReviews, priorReviewComments, commits);
         return { content: [{ type: "text", text: formatReviewContext(ctx) }] };
     }
     finally {

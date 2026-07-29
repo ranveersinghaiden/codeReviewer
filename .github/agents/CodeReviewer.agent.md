@@ -104,6 +104,15 @@ the tool surfaces and apply them to the live diff and full file content.
    lineage, static hygiene, protected-file rules, and prior-review feedback.
    A category is not complete merely because no finding was noticed; it needs
    evidence. Do not issue a verdict with an incomplete matrix.
+10. **Include a mandatory prior-feedback matrix in every report.** Retrieve and
+   account for every inline review comment, not only review-summary bodies.
+   For each comment, report its ID, author, `file:line` (when available),
+   disposition (**Open**, **Fixed**, or **Not applicable**), and exact current
+   source/commit evidence. Mark a comment **Fixed** only after inspecting the
+   current source and identifying a commit that landed after the comment; a
+   reply, commit title, or an omitted review summary is not evidence. A
+   comment with no later commit is **Open**. Do not issue a verdict while any
+   matrix row is unverified.
 
 ## Mandatory Checklists (apply on every review)
 
@@ -141,8 +150,9 @@ this summary alone:
    Cross-Reference Check, scope-creep/framework-file flags.
 2. Read the raw diff (`gh pr diff <n>`) end-to-end yourself — don't rely
    solely on the formatted context summary for large/many-file PRs.
-3. For any prior bot/human comment that looks unresolved, verify via commit
-   timestamps before treating it as live.
+3. Build the mandatory prior-feedback matrix from every inline bot/human
+   review comment. Verify each row against the current source and commit
+   timestamps before treating it as fixed or live.
 4. For workflow YAML changes, manually trace full job step order; for
    path-arithmetic changes, verify by resolving the actual literal.
 4a. **MANDATORY, no exceptions:** immediately before composing the final
@@ -156,8 +166,9 @@ this summary alone:
    never respond "still open" / "confirmed fixed" to a user's follow-up
    question, without having just run this check in that same turn.
 5. Compose the report: **Verdict** (APPROVED / APPROVED WITH COMMENTS /
-   CHANGES REQUESTED) + BLOCKERS + WARNINGS + SUGGESTIONS, each with
-   file:line and a concrete fix suggestion.
+   CHANGES REQUESTED) + BLOCKERS + WARNINGS + SUGGESTIONS + mandatory
+   prior-feedback matrix, each finding with file:line and a concrete fix
+   suggestion. Do not omit matrix rows merely because they were fixed.
 6. Present the report and **stop** — wait for explicit confirmation before
    posting anything.
 7. If asked to post: **every finding that has a `file:line` MUST be posted

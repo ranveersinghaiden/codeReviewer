@@ -110,10 +110,54 @@ export async function fetchPrReviews(owner, repo, prNumber) {
         rest = rest.slice(end + 1).trim();
     }
     return reviews.map((r) => ({
+        id: r.id,
         author: r.user?.login ?? "unknown",
         state: r.state,
         submittedAt: r.submitted_at ?? "",
         body: r.body ?? "",
+    }));
+}
+/**
+ * Fetches every inline review comment, including comments whose parent review
+ * has no summary body. Review summaries alone are insufficient evidence that
+ * prior feedback was considered.
+ */
+export async function fetchPrReviewComments(owner, repo, prNumber) {
+    const stdout = await run("gh", [
+        "api",
+        `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
+        "--paginate",
+    ]);
+    const comments = [];
+    let rest = stdout.trim();
+    while (rest.length > 0) {
+        let depth = 0;
+        let end = -1;
+        for (let i = 0; i < rest.length; i++) {
+            if (rest[i] === "[")
+                depth++;
+            else if (rest[i] === "]") {
+                depth--;
+                if (depth === 0) {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if (end === -1)
+            break;
+        comments.push(...JSON.parse(rest.slice(0, end + 1)));
+        rest = rest.slice(end + 1).trim();
+    }
+    return comments.map((comment) => ({
+        id: comment.id,
+        reviewId: comment.pull_request_review_id ?? null,
+        author: comment.user?.login ?? "unknown",
+        path: comment.path ?? "",
+        line: comment.line ?? comment.original_line ?? null,
+        body: comment.body ?? "",
+        createdAt: comment.created_at ?? "",
+        commitId: comment.commit_id ?? "",
     }));
 }
 /** Fetches all commits on the PR (chronological), used to tell whether prior reviews are stale. */
