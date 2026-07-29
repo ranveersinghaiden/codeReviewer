@@ -1,4 +1,4 @@
-import type { PrMeta, ReviewComment } from "./github.js";
+import type { PrMeta, ReviewComment } from "./review/collectors/github.js";
 import type { DryRunResult } from "./dryRun.js";
 import type { InstructionDoc } from "./instructions.js";
 import { rulesForFiles, type RuleCategory } from "./rules/index.js";

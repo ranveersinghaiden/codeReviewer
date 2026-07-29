@@ -113,6 +113,15 @@ the tool surfaces and apply them to the live diff and full file content.
    reply, commit title, or an omitted review summary is not evidence. A
    comment with no later commit is **Open**. Do not issue a verdict while any
    matrix row is unverified.
+11. **Check each changed code file for duplicate or materially similar existing
+   code.** Search the containing class/module and relevant sibling modules for
+   equivalent methods, helpers, queries, step definitions, and workflow logic.
+   Record the search evidence and disposition for every file in the final
+   report. An outright duplicate implementation or duplicate behavior is a
+   **BLOCKER**. Materially similar code that should be reused, parameterized,
+   or extracted is a **WARNING**. A keyword search with no results is not
+   sufficient evidence; compare the implementation and behavior. Non-code
+   files require an explicit **N/A** reason.
 
 ## Mandatory Checklists (apply on every review)
 
@@ -153,6 +162,9 @@ this summary alone:
 3. Build the mandatory prior-feedback matrix from every inline bot/human
    review comment. Verify each row against the current source and commit
    timestamps before treating it as fixed or live.
+3a. Build the mandatory per-file duplicate/similarity matrix. For each changed
+    code file, search for and compare existing implementations; classify exact
+    duplicates as BLOCKERS and material similarities as WARNINGS.
 4. For workflow YAML changes, manually trace full job step order; for
    path-arithmetic changes, verify by resolving the actual literal.
 4a. **MANDATORY, no exceptions:** immediately before composing the final
@@ -167,8 +179,9 @@ this summary alone:
    question, without having just run this check in that same turn.
 5. Compose the report: **Verdict** (APPROVED / APPROVED WITH COMMENTS /
    CHANGES REQUESTED) + BLOCKERS + WARNINGS + SUGGESTIONS + mandatory
-   prior-feedback matrix, each finding with file:line and a concrete fix
-   suggestion. Do not omit matrix rows merely because they were fixed.
+   prior-feedback and duplicate/similarity matrices, each finding with
+   file:line and a concrete fix suggestion. Do not omit matrix rows merely
+   because they were fixed.
 6. Present the report and **stop** — wait for explicit confirmation before
    posting anything.
 7. If asked to post: **every finding that has a `file:line` MUST be posted

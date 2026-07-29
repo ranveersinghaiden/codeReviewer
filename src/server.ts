@@ -10,7 +10,7 @@ import {
   fetchPrReviews,
   fetchPrReviewComments,
   fetchPrCommits,
-} from "./github.js";
+} from "./review/collectors/github.js";
 import { checkoutPrWorktree, cleanupWorktree } from "./worktree.js";
 import { loadInstructions, formatInstructionsContext } from "./instructions.js";
 import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";

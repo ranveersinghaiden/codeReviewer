@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { ensureGhAvailable, fetchPrMeta, fetchPrDiff, fetchPrReviews, fetchPrReviewComments, fetchPrCommits, } from "./github.js";
+import { ensureGhAvailable, fetchPrMeta, fetchPrDiff, fetchPrReviews, fetchPrReviewComments, fetchPrCommits, } from "./review/collectors/github.js";
 import { checkoutPrWorktree, cleanupWorktree } from "./worktree.js";
 import { loadInstructions, formatInstructionsContext } from "./instructions.js";
 import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";

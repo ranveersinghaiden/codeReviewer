@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { collectReviewEvidence, formatReviewEvidence } from "./review/orchestrator.js";
 import { classifyChangedFiles, detectOutOfScopeFiles } from "./scope.js";
 const MAX_FILE_CHARS = 60_000;
 async function readFileSafe(fullPath) {
@@ -115,27 +116,8 @@ export function formatReviewContext(ctx) {
         parts.push("(none found — this is the first review on this PR)");
         parts.push("");
     }
-    parts.push("## Mandatory Prior-Feedback Matrix");
-    parts.push("Every row below MUST appear in the final review report with a disposition of **Open**, **Fixed**, " +
-        "or **Not applicable**. A row may be marked **Fixed** only after inspecting the current source and " +
-        "identifying a commit dated after the comment. Do not infer a disposition from a PR reply, commit title, " +
-        "or review-summary text. If no commit landed after the comment, it remains **Open**.");
-    parts.push("");
-    if (ctx.priorReviewComments.length === 0) {
-        parts.push("(no inline review comments found)");
-    }
-    else {
-        parts.push("| Comment | Author | Location | Created | Required final-report disposition |");
-        parts.push("| --- | --- | --- | --- | --- |");
-        for (const comment of ctx.priorReviewComments) {
-            const location = comment.path
-                ? `\`${comment.path}${comment.line === null ? "" : `:${comment.line}`}\``
-                : "(general)";
-            const body = comment.body.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
-            parts.push(`| \`${comment.id}\` — ${body} | ${comment.author} | ${location} | ${comment.createdAt} | **UNVERIFIED** |`);
-        }
-    }
-    parts.push("");
+    const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
+    parts.push(...formatReviewEvidence(evidence));
     if (ctx.isAutofixPr) {
         parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");
         parts.push("This PR is labeled AI_AUTOFIX / AI_AUTOFIX_NEEDS_REVIEW. Per this repo's established review practice " +

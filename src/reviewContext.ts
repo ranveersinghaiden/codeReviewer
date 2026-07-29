@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { PrMeta, PrReview, PrReviewComment, PrCommit } from "./github.js";
+import type { PrMeta, PrReview, PrReviewComment, PrCommit } from "./review/collectors/github.js";
+import { collectReviewEvidence, formatReviewEvidence } from "./review/orchestrator.js";
 import { classifyChangedFiles, detectOutOfScopeFiles, type FileClassification } from "./scope.js";
 
 export interface FileContext {
@@ -29,7 +30,6 @@ export interface ReviewContext {
 }
 
 const MAX_FILE_CHARS = 60_000;
-
 async function readFileSafe(fullPath: string): Promise<{ content: string | null; truncated: boolean }> {
   try {
     const buf = await readFile(fullPath);
@@ -172,30 +172,8 @@ export function formatReviewContext(ctx: ReviewContext): string {
     parts.push("");
   }
 
-  parts.push("## Mandatory Prior-Feedback Matrix");
-  parts.push(
-    "Every row below MUST appear in the final review report with a disposition of **Open**, **Fixed**, " +
-      "or **Not applicable**. A row may be marked **Fixed** only after inspecting the current source and " +
-      "identifying a commit dated after the comment. Do not infer a disposition from a PR reply, commit title, " +
-      "or review-summary text. If no commit landed after the comment, it remains **Open**."
-  );
-  parts.push("");
-  if (ctx.priorReviewComments.length === 0) {
-    parts.push("(no inline review comments found)");
-  } else {
-    parts.push("| Comment | Author | Location | Created | Required final-report disposition |");
-    parts.push("| --- | --- | --- | --- | --- |");
-    for (const comment of ctx.priorReviewComments) {
-      const location = comment.path
-        ? `\`${comment.path}${comment.line === null ? "" : `:${comment.line}`}\``
-        : "(general)";
-      const body = comment.body.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
-      parts.push(
-        `| \`${comment.id}\` — ${body} | ${comment.author} | ${location} | ${comment.createdAt} | **UNVERIFIED** |`
-      );
-    }
-  }
-  parts.push("");
+  const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
+  parts.push(...formatReviewEvidence(evidence));
 
   if (ctx.isAutofixPr) {
     parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");
