@@ -118,15 +118,95 @@ export async function fetchPrReviews(owner, repo, prNumber) {
     }));
 }
 /**
+ * GitHub's REST review-comments endpoint does not expose thread resolution or
+ * outdated-anchor state. Fetch it through GraphQL so reports can distinguish
+ * "source fixed" from "conversation resolved" and identify acknowledgement
+ * replies that are not independent findings.
+ */
+async function fetchReviewThreadCommentStates(owner, repo, prNumber) {
+    const states = new Map();
+    let cursor = null;
+    do {
+        const query = `
+      query ReviewThreads($owner: String!, $repo: String!, $number: Int!, $after: String) {
+        repository(owner: $owner, name: $repo) {
+          pullRequest(number: $number) {
+            reviewThreads(first: 100, after: $after) {
+              nodes {
+                id
+                isResolved
+                isOutdated
+                comments(first: 100) {
+                  nodes {
+                    databaseId
+                    replyTo { databaseId }
+                  }
+                  pageInfo { hasNextPage }
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+      }
+    `;
+        const args = [
+            "api",
+            "graphql",
+            "-f",
+            `query=${query}`,
+            "-f",
+            `owner=${owner}`,
+            "-f",
+            `repo=${repo}`,
+            "-F",
+            `number=${prNumber}`,
+        ];
+        if (cursor !== null) {
+            args.push("-f", `after=${cursor}`);
+        }
+        const json = JSON.parse(await run("gh", args));
+        const reviewThreads = json.data?.repository?.pullRequest?.reviewThreads;
+        if (!reviewThreads) {
+            throw new Error(`GitHub did not return review threads for ${owner}/${repo}#${prNumber}.`);
+        }
+        for (const thread of reviewThreads.nodes ?? []) {
+            if (thread.comments?.pageInfo?.hasNextPage) {
+                throw new Error(`Review thread ${thread.id} has more than 100 comments; refusing to omit prior feedback.`);
+            }
+            for (const comment of thread.comments?.nodes ?? []) {
+                if (typeof comment.databaseId !== "number") {
+                    continue;
+                }
+                states.set(comment.databaseId, {
+                    commentId: comment.databaseId,
+                    threadId: thread.id,
+                    isResolved: thread.isResolved,
+                    isOutdated: thread.isOutdated,
+                    isReply: comment.replyTo?.databaseId != null,
+                });
+            }
+        }
+        cursor = reviewThreads.pageInfo?.hasNextPage ? reviewThreads.pageInfo.endCursor : null;
+    } while (cursor !== null);
+    return states;
+}
+/**
  * Fetches every inline review comment, including comments whose parent review
  * has no summary body. Review summaries alone are insufficient evidence that
  * prior feedback was considered.
  */
 export async function fetchPrReviewComments(owner, repo, prNumber) {
-    const stdout = await run("gh", [
-        "api",
-        `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
-        "--paginate",
+    const [stdout, threadStates] = await Promise.all([
+        run("gh", [
+            "api",
+            `repos/${owner}/${repo}/pulls/${prNumber}/comments`,
+            "--paginate",
+        ]),
+        fetchReviewThreadCommentStates(owner, repo, prNumber),
     ]);
     const comments = [];
     let rest = stdout.trim();
@@ -149,16 +229,26 @@ export async function fetchPrReviewComments(owner, repo, prNumber) {
         comments.push(...JSON.parse(rest.slice(0, end + 1)));
         rest = rest.slice(end + 1).trim();
     }
-    return comments.map((comment) => ({
-        id: comment.id,
-        reviewId: comment.pull_request_review_id ?? null,
-        author: comment.user?.login ?? "unknown",
-        path: comment.path ?? "",
-        line: comment.line ?? comment.original_line ?? null,
-        body: comment.body ?? "",
-        createdAt: comment.created_at ?? "",
-        commitId: comment.commit_id ?? "",
-    }));
+    return comments.map((comment) => {
+        const threadState = threadStates.get(comment.id);
+        return {
+            id: comment.id,
+            reviewId: comment.pull_request_review_id ?? null,
+            author: comment.user?.login ?? "unknown",
+            path: comment.path ?? "",
+            line: comment.line ?? comment.original_line ?? null,
+            originalLine: comment.original_line ?? null,
+            body: comment.body ?? "",
+            createdAt: comment.created_at ?? "",
+            commitId: comment.commit_id ?? "",
+            originalCommitId: comment.original_commit_id ?? "",
+            url: comment.html_url ?? "",
+            threadId: threadState?.threadId ?? null,
+            isThreadResolved: threadState?.isResolved ?? null,
+            isThreadOutdated: threadState?.isOutdated ?? null,
+            isReply: threadState?.isReply ?? null,
+        };
+    });
 }
 /** Fetches all commits on the PR (chronological), used to tell whether prior reviews are stale. */
 export async function fetchPrCommits(owner, repo, prNumber) {

@@ -1,25 +1,35 @@
 function location(path, line) {
     return path ? `\`${path}${line === null ? "" : `:${line}`}\`` : "(general)";
 }
+function threadState(comment) {
+    if (comment.threadId === null) {
+        return "**UNAVAILABLE**";
+    }
+    const resolution = comment.isThreadResolved ? "Resolved" : "Open";
+    const anchor = comment.isThreadOutdated ? "outdated" : "current";
+    return `${resolution}, ${anchor}`;
+}
 export function formatPriorFeedbackMatrix(checks) {
     const lines = [
         "## Mandatory Prior-Feedback Matrix",
         "Every row below MUST appear in the final review report with a disposition of **Open**, **Fixed**, " +
             "or **Not applicable**. A row may be marked **Fixed** only after inspecting the current source and " +
-            "identifying a commit dated after the comment. Do not infer a disposition from a PR reply, commit title, " +
-            "or review-summary text. If no commit landed after the comment, it remains **Open**.",
+            "identifying a commit dated after the comment. GitHub thread state is independent: an **Open** thread can " +
+            "be technically fixed, while a resolved thread is not source evidence. Do not infer a disposition from a " +
+            "PR reply, commit title, or review-summary text. If no commit landed after the comment, it remains **Open**.",
         "",
     ];
     if (checks.length === 0) {
         lines.push("(no inline review comments found)");
     }
     else {
-        lines.push("| Comment | Author | Location | Created | Required final-report disposition |");
-        lines.push("| --- | --- | --- | --- | --- |");
+        lines.push("| Comment | Author | Location | GitHub thread state | Created | Required final-report disposition |");
+        lines.push("| --- | --- | --- | --- | --- | --- |");
         for (const { comment } of checks) {
             const body = comment.body.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
-            lines.push(`| \`${comment.id}\` — ${body} | ${comment.author} | ${location(comment.path, comment.line)} | ` +
-                `${comment.createdAt} | **UNVERIFIED** |`);
+            const kind = comment.isReply ? "reply" : "feedback";
+            lines.push(`| \`${comment.id}\` (${kind}) — ${body} | ${comment.author} | ${location(comment.path, comment.line)} | ` +
+                `${threadState(comment)} | ${comment.createdAt} | **UNVERIFIED** |`);
         }
     }
     lines.push("");

@@ -105,14 +105,20 @@ the tool surfaces and apply them to the live diff and full file content.
    A category is not complete merely because no finding was noticed; it needs
    evidence. Do not issue a verdict with an incomplete matrix.
 10. **Include a mandatory prior-feedback matrix in every report.** Retrieve and
-   account for every inline review comment, not only review-summary bodies.
-   For each comment, report its ID, author, `file:line` (when available),
-   disposition (**Open**, **Fixed**, or **Not applicable**), and exact current
-   source/commit evidence. Mark a comment **Fixed** only after inspecting the
-   current source and identifying a commit that landed after the comment; a
-   reply, commit title, or an omitted review summary is not evidence. A
-   comment with no later commit is **Open**. Do not issue a verdict while any
-   matrix row is unverified.
+   account for every inline review comment and review thread, including
+   resolved, outdated, and reply-only comments, not only review-summary
+   bodies. For each comment, report its ID, author, `file:line` (when
+   available), GitHub thread state (Open/Resolved and current/outdated),
+   whether it is a reply, disposition (**Open**, **Fixed**, or **Not
+   applicable**), and exact current source/commit evidence. Treat GitHub
+   conversation resolution and source resolution as independent facts: an Open
+   thread can be technically Fixed, and a resolved thread is not proof of a
+   source fix. Mark a comment **Fixed** only after inspecting the current
+   source and identifying a commit that landed after the comment; a reply,
+   commit title, or an omitted review summary is not evidence. Reply-only
+   acknowledgements require an explicit **Not applicable** row. A comment with
+   no later commit is **Open**. Do not issue a verdict while any matrix row is
+   unverified.
 11. **Check each changed code file for duplicate or materially similar existing
    code.** Search the containing class/module and relevant sibling modules for
    equivalent methods, helpers, queries, step definitions, and workflow logic.
