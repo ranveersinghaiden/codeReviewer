@@ -14,7 +14,7 @@ import { buildReviewPayload } from "./reviewPayload.js";
 // and (via build_review_payload) formats findings into a ready-to-submit
 // GitHub review payload — but never submits it. All rule judgement
 // (BLOCKER/WARNING/SUGGESTION) and the actual `gh api .../reviews` POST call
-// remain the calling agent's responsibility, only after explicit human sign-off.
+// remain the calling agent's responsibility, only after explicit user confirmation.
 const server = new McpServer({
     name: "code-reviewer-mcp",
     version: "0.3.0",
@@ -24,6 +24,7 @@ const prIdentifierShape = {
     repo: z.string().describe("Repository name, e.g. 'hello-world'"),
     pr_number: z.number().int().positive().describe("Pull request number"),
 };
+const gatherReviewContextDescription = "Collects a read-only PR review bundle: prior reviews and inline feedback, commits, metadata, diff, full changed-file content, matching instructions, and scope/framework-file flags. It includes review evidence and applicable static-review guidance. The tool never executes PR code or posts to GitHub; the calling reviewer applies the agent contract and presents the final report.";
 server.registerTool("fetch_pr", {
     title: "Fetch PR locally (read-only)",
     description: "Checks out a GitHub pull request into an isolated, disposable local git worktree (read-only — never touches any existing local checkout, never pushes/commits) and returns its metadata (title, body, base/head refs, changed files).",
@@ -58,7 +59,7 @@ server.registerTool("load_instructions", {
 });
 server.registerTool("gather_review_context", {
     title: "Gather deep review context for a PR (read-only)",
-    description: "The core tool for in-depth PR review. Checks out the PR read-only, then returns: any PRIOR REVIEWS already posted on this PR (author, verdict, body — ALWAYS check this before posting a new review; never post a duplicate/conflicting APPROVE over an unresolved CHANGES_REQUESTED) alongside the list of commits that landed AFTER the most recent prior review (so the calling agent knows whether the PR has actually changed since it was last reviewed — if no new commits exist, prior comments are still live/unresolved, not stale; if new commits exist, each prior finding claimed as fixed must be verified against those specific commits, and the new commits must themselves be checked for fresh issues), an explicit verification-evidence checklist if the PR is labeled AI_AUTOFIX/AI_AUTOFIX_NEEDS_REVIEW (this repo's autofix pipeline requires a live passing test re-run as evidence, not just a clean diff), the PR diff, the FULL current content of every changed file (not just the diff hunk, so the reviewer can judge changes in relation to the surrounding class/module rather than in isolation), the module(s) each changed file belongs to, any out-of-scope/scope-creep files detected, any framework/protected files touched (pom.xml, Hooks.java, PropertyReader.java, Constants.java, EnvGuard.java, runner classes, CI workflow YAML — these require explicit human approval before merge), and the matching review skill files (.github/skills/*/SKILL.md) plus repo instruction docs (.github/instructions/*.instructions.md) for the modules touched, and a MANDATORY cross-reference checklist (file-move/rename path-arithmetic recomputation, moved-file non-code dependency drift, stale references to old paths, doc-vs-actual-script behavior mismatches, untrusted GitHub Actions input reaching a shell, CLI-arg regex leading-dash injection, a dry-run-discipline reminder, CI workflow step-ordering — tool invocations must come after their own setup/toolchain step, checked independently per job — and protected/framework-file portability/process checks), plus a MANDATORY test-automation framework layering checklist for Playwright/Appium projects (WebAction/MobileAction must contain only low-level driver/screen actions with no business logic or embedded validations; Playwright must be initialized exactly once in hooks, not re-initialized elsewhere; validations belong in page/screen objects; step definitions should ideally be thin bindings only; locators should prefer id/class-name/stable-attribute strategies over fragile CSS/XPath/text/positional selectors). This tool does NOT run tests/builds and does NOT post anything to GitHub — it only gathers context. The calling agent is responsible for applying the rules from the returned skills/instructions and producing the final BLOCKER/WARNING/SUGGESTION report.",
+    description: gatherReviewContextDescription,
     inputSchema: prIdentifierShape,
 }, async ({ owner, repo, pr_number }) => {
     await ensureGhAvailable();

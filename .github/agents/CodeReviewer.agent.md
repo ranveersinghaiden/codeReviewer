@@ -149,6 +149,10 @@ this summary alone:
   single-init, validations placement, thin step definitions, locator
   strategy — plus scope/framework-file flag handling. See
   `codereviewer-contracts/framework-layering-checklist.md`.
+- **Policy decisions** — when changing reviewer policy or resolving a
+  conflicting instruction, apply the accepted decisions in
+  `codereviewer-contracts/policy-decisions.md`. Update every policy surface
+  with the decision; do not reintroduce superseded behavior during refactors.
 
 ## Workflow
 

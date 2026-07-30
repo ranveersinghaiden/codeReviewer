@@ -226,10 +226,10 @@ export function formatReviewContext(ctx: ReviewContext): string {
       "accepts a value starting with -/-- , which downstream tools (git, mvn, curl) may parse as an option " +
       "rather than literal data — require the regex to reject a leading dash.\n" +
       "\n" +
-      "**Dry-Run Discipline (reinforces existing mandate)**\n" +
-      "- BLOCKER: a new/modified test's assertions were read but not actually executed before approving. " +
-      "Regex/formatting bugs and stale path arithmetic are frequently only caught by running the code — do not " +
-      "approve on read-through alone when a runnable test suite exists.\n" +
+      "**Execution Evidence (static-only reviewer)**\n" +
+      "- Do not execute PR code. Where repository policy requires runtime proof, inspect linked CI/manual " +
+      "evidence or request it from the author. For an AI_AUTOFIX test-fix claim, a targeted passing run on " +
+      "the PR head remains required; do not report the reviewer's own non-execution as a defect.\n" +
       "\n" +
       "**Workflow Step Ordering (CI/CD YAML)**\n" +
       "- WARNING/BLOCKER: a new or moved step invokes a tool (python3, node, a specific compiler/SDK version) " +

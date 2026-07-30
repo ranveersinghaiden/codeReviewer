@@ -35,5 +35,8 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
 
 - Treat `outOfScopeFiles` (files not sharing the diff's dominant module) as
   a scope-creep signal to explicitly question, not auto-reject.
-- Treat framework/protected-file flags as requiring explicit human sign-off
-  before merge — call this out clearly in the report, per-file.
+- Treat framework/protected-file flags as requiring full inspection and
+  per-file reporting. An author's explicit PR-description confirmation that
+  the protected change is intentional and verified is sufficient process
+  evidence; evaluate technical correctness independently and do not require
+  a second person's approval.

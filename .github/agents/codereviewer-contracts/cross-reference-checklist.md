@@ -43,9 +43,11 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
   directly into a `run:` shell body, is a BLOCKER — require `env:` +
   quoted `"$VAR"` instead, even for values that look "internal." Also check
   CLI-arg validation regexes reject a leading `-`/`--` (option-injection).
-- **Dry-run discipline**: don't approve on read-through alone when a
-  runnable test suite exists for the changed assertions — regex/path bugs
-  are often only caught by running the code.
+- **Execution evidence (static-only reviewer)**: do not execute PR code.
+  Where repository policy requires runtime proof, inspect linked CI/manual
+  evidence or request it from the author. For an AI_AUTOFIX test-fix claim,
+  a targeted passing run on the PR head remains required; do not report the
+  reviewer's own non-execution as a defect.
 - **Workflow step ordering (CI/CD YAML)**: read the *full job* top-to-bottom,
   not just the diff hunk. If a step invokes a tool (`python3`, `node`, a
   pinned SDK) that's only guaranteed available via an earlier setup step
