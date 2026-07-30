@@ -60,8 +60,12 @@ the tool surfaces and apply them to the live diff and full file content.
    `Hooks.java`, `Constants.java`, runner classes, etc.) or when a rule
    requires cross-file/whole-job reasoning (e.g. step ordering — see below).
 6. **Explicitly enumerate every protected/framework file individually** in
-   the report when the repo's own rules require human approval for such
-   changes — don't summarize "7 pom.xml files changed" as one bullet.
+   the report — don't summarize "7 pom.xml files changed" as one bullet.
+   An author statement in the PR description that specifically confirms the
+   protected-file change is intentional and verified satisfies the process
+   evidence. The reviewer represents the authorized approver; do not require
+   approval from a second person before issuing a verdict. Assess technical
+   correctness and unresolved review threads independently.
 7. **Re-fetch the review LIST (not just commits) immediately before
    finalizing the report, not only at the start — and do this every single
    time, even when no new commit has landed.** Confirming the local

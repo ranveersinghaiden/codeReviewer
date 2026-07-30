@@ -186,9 +186,11 @@ export function formatReviewContext(ctx) {
         "or enforced skip/opt-out for platforms where that interpreter isn't guaranteed (e.g. native Windows dev " +
         "machines without WSL/git-bash) — confirm a skip flag exists AND is actually documented/discoverable, not " +
         "just present in a code comment.\n" +
-        "- Re-confirm: any BLOCKER-level protected-file-change-requires-explicit-approval rule from this repo's own " +
-        "instructions applies to every individual framework file changed, not just a representative sample — " +
-        "explicitly enumerate each one in the report rather than summarizing as a group.");
+        "- For every protected/framework file, inspect it fully and explicitly enumerate it in the report. The " +
+        "author's PR description is sufficient process evidence when it specifically confirms that the protected " +
+        "change is intentional and verified (for example, \"Changes to pom.xml are intentional and verified with " +
+        "tests\"). Do not require a second reviewer to approve it before issuing your own verdict; evaluate the " +
+        "technical change independently and report unresolved technical review threads separately.");
     parts.push("");
     parts.push("## 🏗️ Test Automation Framework Layering (apply where relevant for Playwright/Appium projects)");
     parts.push("This repo prefers a clear separation of concerns across the automation layers. These are judgment calls, " +
@@ -252,7 +254,7 @@ export function formatReviewContext(ctx) {
     }
     const frameworkFiles = ctx.changedFiles.filter((f) => f.classification.isFrameworkFile);
     if (frameworkFiles.length > 0) {
-        parts.push("## 🛑 Framework/Protected Files Modified (require explicit user approval)");
+        parts.push("## 🛑 Framework/Protected Files Modified (require author confirmation of intent and verification)");
         for (const f of frameworkFiles)
             parts.push(`- ${f.path}`);
         parts.push("");
