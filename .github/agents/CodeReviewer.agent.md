@@ -153,6 +153,11 @@ this summary alone:
   conflicting instruction, apply the accepted decisions in
   `codereviewer-contracts/policy-decisions.md`. Update every policy surface
   with the decision; do not reintroduce superseded behavior during refactors.
+- **Agent-contract modularity** — keep detailed checklists, policy decisions,
+  and incident examples in their focused contracts. The primary contract may
+  summarize and link to them but must not reabsorb their substantive content.
+  Apply `codereviewer-contracts/cross-reference-checklist.md` when any agent
+  contract changes.
 
 ## Workflow
 

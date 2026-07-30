@@ -18,6 +18,16 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
   A literal must agree with all applicable sources. Do not infer an alias from
   a similarly named directory; flag a mismatch as a WARNING when it can send
   generated work to the wrong module.
+- **Agent-contract modularity**: when an agent contract or its referenced
+  contracts change, compare the primary `.github/agents/*.agent.md` file with
+  its focused contract files. The primary contract may summarize and link to
+  them, but must not reabsorb or substantively duplicate a detailed checklist,
+  policy-decision log, or known-gotcha content. Flag a reabsorption or
+  duplication as a WARNING, and as a BLOCKER if the PR deletes, disconnects,
+  or makes the focused source non-authoritative while moving its rules into
+  the primary contract. Record the primary contract, each referenced contract,
+  and the comparison evidence in the evidence matrix. Do not use a line-count
+  threshold alone.
 - **PR-description delivery claims**: compare every concrete deliverable
   named in the PR description (new scripts, workflows, contracts, tests, or
   data files) with `git diff --name-status base...head`. A claimed addition

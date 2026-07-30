@@ -156,6 +156,15 @@ export function formatReviewContext(ctx) {
         "- WARNING: a skill/instruction doc references a file or directory path (as an \"applies to\" glob, example, " +
         "or migration note) that doesn't exist in the repo — verify with ls/find before approving a doc diff.\n" +
         "\n" +
+        "**Agent-Contract Modularity**\n" +
+        "- When an agent contract or its referenced contracts change, compare the primary `.github/agents/*.agent.md` " +
+        "file with its focused contract files. The primary contract may summarize and link to them, but must not " +
+        "reabsorb or substantively duplicate a detailed checklist, policy-decision log, or known-gotcha content.\n" +
+        "- WARNING: detailed focused-contract content is reabsorbed or duplicated in the primary contract. BLOCKER: " +
+        "the PR deletes, disconnects, or makes the focused source non-authoritative while moving its rules into the " +
+        "primary contract. Record the primary contract, every referenced contract, and comparison evidence in the " +
+        "evidence matrix; do not use a line-count threshold alone.\n" +
+        "\n" +
         "**Untrusted Input Reaching a Shell**\n" +
         "- BLOCKER: `${{ github.event.inputs.* }}` / `github.event.*.body` / other user- or PR-controlled GitHub " +
         "Actions context interpolated directly into a run: shell body instead of via env: + \"$VAR\" — even if the " +

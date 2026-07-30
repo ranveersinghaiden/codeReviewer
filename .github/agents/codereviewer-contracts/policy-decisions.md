@@ -29,3 +29,18 @@ entry explicitly supersedes them.
 - **Rationale:** Process evidence and technical correctness are independent.
   The reviewer must still inspect and enumerate every protected file and
   report unresolved technical or feedback issues.
+
+## D-003: Agent-contract modularity
+
+- **Date:** 2026-07-31
+- **Status:** Accepted
+- **Decision:** The primary agent contract defines role, hard rules, workflow,
+  and references to focused contracts. Detailed checklists, policy decisions,
+  and incident examples remain in their dedicated files. A PR must not
+  reabsorb a focused contract into the primary agent file or duplicate its
+  substantive rules there.
+- **Rationale:** Focused contracts are deliberately loaded independently to
+  keep the agent's working context manageable and make each policy easier to
+  maintain. A line-count threshold alone is insufficient: a concise,
+  justified change may be longer, while duplicated policy creates conflicting
+  sources of truth at any length.
