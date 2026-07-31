@@ -27,7 +27,7 @@ async function readFileSafe(fullPath) {
  * and any out-of-scope / framework-file flags. Performs no execution and posts
  * nothing — purely read/gather.
  */
-export async function gatherReviewContext(worktreePath, meta, diff, priorReviews = [], priorReviewComments = [], commits = []) {
+export async function gatherReviewContext(worktreePath, meta, diff, priorReviews = [], priorReviewComments = [], commits = [], reviewerFindings = []) {
     const changedPaths = meta.files.map((f) => f.path);
     const classifications = classifyChangedFiles(changedPaths);
     const outOfScopeFiles = detectOutOfScopeFiles(classifications);
@@ -68,6 +68,7 @@ export async function gatherReviewContext(worktreePath, meta, diff, priorReviews
         repoInstructions,
         priorReviews,
         priorReviewComments,
+        reviewerFindings,
         isAutofixPr,
         commitsSincePriorReviews,
     };
@@ -117,7 +118,7 @@ export function formatReviewContext(ctx) {
         parts.push("");
     }
     const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
-    parts.push(...formatReviewEvidence(evidence));
+    parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
     if (ctx.isAutofixPr) {
         parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");
         parts.push("This PR is labeled AI_AUTOFIX / AI_AUTOFIX_NEEDS_REVIEW. Per this repo's established review practice " +

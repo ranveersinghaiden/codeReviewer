@@ -1,3 +1,4 @@
+import type { ReviewerFindingRecord } from "./findingsLedger.js";
 import type { DuplicateSimilarityCheck, PriorFeedbackCheck } from "./types.js";
 
 function location(path: string, line: number | null): string {
@@ -61,6 +62,37 @@ export function formatDuplicateSimilarityMatrix(checks: DuplicateSimilarityCheck
         ? `| \`${check.path}\` | **UNVERIFIED** — search existing implementations |`
         : `| \`${check.path}\` | **N/A** — non-code file; include the reason in the final report |`
     );
+  }
+  lines.push("");
+  return lines;
+}
+
+export function formatReviewerFindingLedger(findings: ReviewerFindingRecord[]): string[] {
+  const lines = [
+    "## Mandatory Reviewer-Finding Ledger",
+    "These are findings made by this reviewer in earlier passes, separate from GitHub comments. Before issuing a " +
+      "verdict, reconcile every **Open** row through `reconcile_reviewer_findings` with an explicit disposition: " +
+      "**Open**, **Fixed**, **Superseded**, or **Not PR-unique**. The tool rejects a verdict workflow that omits " +
+      "an earlier Open finding. Mark **Fixed** only with current source and later-commit evidence; use " +
+      "**Superseded** only when a replacement finding is also recorded.",
+    "",
+  ];
+  if (findings.length === 0) {
+    lines.push("(no reviewer-originated findings recorded for this PR yet)");
+  } else {
+    lines.push("| Ledger ID | Severity | Location | Disposition | Last reviewed head | Required action |");
+    lines.push("| --- | --- | --- | --- | --- | --- |");
+    for (const finding of findings) {
+      const location = `\`${finding.file}${finding.line === null ? "" : `:${finding.line}`}\``;
+      const action =
+        finding.disposition === "Open"
+          ? `Reconcile this ID with current evidence: \`${finding.id}\``
+          : finding.evidence.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+      lines.push(
+        `| \`${finding.id}\` | ${finding.severity} | ${location} | **${finding.disposition}** | ` +
+          `\`${finding.lastReviewedHead.slice(0, 12)}\` | ${action} |`
+      );
+    }
   }
   lines.push("");
   return lines;

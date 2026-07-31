@@ -14,6 +14,12 @@ import {
 import { checkoutPrWorktree, cleanupWorktree } from "./worktree.js";
 import { loadInstructions, formatInstructionsContext } from "./instructions.js";
 import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";
+import {
+  getReviewerFindings,
+  reconcileReviewerFindings,
+  type FindingDisposition,
+  type ReviewerFindingInput,
+} from "./review/findingsLedger.js";
 import { buildReviewPayload } from "./reviewPayload.js";
 
 // This MCP server is strictly READ-ONLY: it never runs `git commit`/`git push`/
@@ -37,7 +43,7 @@ const prIdentifierShape = {
 };
 
 const gatherReviewContextDescription =
-  "Collects a read-only PR review bundle: prior reviews and inline feedback, commits, metadata, diff, full changed-file content, matching instructions, and scope/framework-file flags. It includes review evidence and applicable static-review guidance. The tool never executes PR code or posts to GitHub; the calling reviewer applies the agent contract and presents the final report.";
+  "Collects a read-only PR review bundle: prior reviews and inline feedback, durable reviewer-originated findings, commits, metadata, diff, full changed-file content, matching instructions, and scope/framework-file flags. It includes review evidence and applicable static-review guidance. The tool never executes PR code or posts to GitHub; the calling reviewer applies the agent contract and presents the final report.";
 
 server.registerTool(
   "fetch_pr",
@@ -100,18 +106,80 @@ server.registerTool(
         fetchPrReviewComments(owner, repo, pr_number),
         fetchPrCommits(owner, repo, pr_number),
       ]);
+      const reviewerFindings = await getReviewerFindings(owner, repo, pr_number);
       const ctx = await gatherReviewContext(
         checkout.worktreePath,
         meta,
         diff,
         priorReviews,
         priorReviewComments,
-        commits
+        commits,
+        reviewerFindings
       );
       return { content: [{ type: "text", text: formatReviewContext(ctx) }] };
     } finally {
       await cleanupWorktree(checkout);
     }
+  }
+);
+
+const findingDispositionShape = z.enum([
+  "Open",
+  "Fixed",
+  "Superseded",
+  "Not PR-unique",
+]) satisfies z.ZodType<FindingDisposition>;
+
+const reviewerFindingInputShape = z.object({
+  severity: z.enum(["BLOCKER", "WARNING", "SUGGESTION"]),
+  file: z.string().min(1).describe("Path relative to repository root."),
+  line: z.number().int().positive().nullable().describe("Current-file line, or null for a whole-file finding."),
+  message: z.string().min(1).describe("Concise finding statement used for its stable fingerprint."),
+  recommendation: z.string().min(1).describe("Concrete remediation."),
+}) satisfies z.ZodType<ReviewerFindingInput>;
+
+server.registerTool(
+  "reconcile_reviewer_findings",
+  {
+    title: "Reconcile durable reviewer findings (local only)",
+    description:
+      "Records this review pass's reviewer-originated findings in the local PR ledger at ~/.copilot/code-reviewer/review-findings.json. Every previously Open ledger finding must be explicitly reconciled as Open, Fixed, Superseded, or Not PR-unique with current evidence; the tool rejects omissions. Existing findings are updated by ledger_id. New findings omit ledger_id and supply finding. This never changes the PR or posts to GitHub.",
+    inputSchema: {
+      ...prIdentifierShape,
+      head_sha: z.string().min(7).describe("Current PR head SHA reviewed in this pass."),
+      reconciliations: z
+        .array(
+          z.object({
+            ledger_id: z.string().optional().describe("Required for a prior ledger finding; omit for a new finding."),
+            disposition: findingDispositionShape,
+            evidence: z.string().min(1).describe("Current source or later-commit evidence supporting the disposition."),
+            finding: reviewerFindingInputShape.optional().describe("Required only for a new finding."),
+          })
+        )
+        .describe("Every prior Open ledger finding plus each new reviewer-originated finding."),
+    },
+  },
+  async ({ owner, repo, pr_number, head_sha, reconciliations }) => {
+    const findings = await reconcileReviewerFindings(
+      owner,
+      repo,
+      pr_number,
+      head_sha,
+      reconciliations.map((reconciliation) => ({
+        id: reconciliation.ledger_id,
+        disposition: reconciliation.disposition,
+        evidence: reconciliation.evidence,
+        finding: reconciliation.finding,
+      }))
+    );
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ findings }, null, 2),
+        },
+      ],
+    };
   }
 );
 

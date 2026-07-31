@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { PrMeta, PrReview, PrReviewComment, PrCommit } from "./review/collectors/github.js";
 import { collectReviewEvidence, formatReviewEvidence } from "./review/orchestrator.js";
+import type { ReviewerFindingRecord } from "./review/findingsLedger.js";
 import { classifyChangedFiles, detectOutOfScopeFiles, type FileClassification } from "./scope.js";
 
 export interface FileContext {
@@ -25,6 +26,7 @@ export interface ReviewContext {
   repoInstructions: SkillDoc[];
   priorReviews: PrReview[];
   priorReviewComments: PrReviewComment[];
+  reviewerFindings: ReviewerFindingRecord[];
   isAutofixPr: boolean;
   commitsSincePriorReviews: PrCommit[];
 }
@@ -60,7 +62,8 @@ export async function gatherReviewContext(
   diff: string,
   priorReviews: PrReview[] = [],
   priorReviewComments: PrReviewComment[] = [],
-  commits: PrCommit[] = []
+  commits: PrCommit[] = [],
+  reviewerFindings: ReviewerFindingRecord[] = []
 ): Promise<ReviewContext> {
   const changedPaths = meta.files.map((f) => f.path);
   const classifications = classifyChangedFiles(changedPaths);
@@ -115,6 +118,7 @@ export async function gatherReviewContext(
     repoInstructions,
     priorReviews,
     priorReviewComments,
+    reviewerFindings,
     isAutofixPr,
     commitsSincePriorReviews,
   };
@@ -173,7 +177,7 @@ export function formatReviewContext(ctx: ReviewContext): string {
   }
 
   const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
-  parts.push(...formatReviewEvidence(evidence));
+  parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
 
   if (ctx.isAutofixPr) {
     parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");

@@ -44,3 +44,16 @@ entry explicitly supersedes them.
   maintain. A line-count threshold alone is insufficient: a concise,
   justified change may be longer, while duplicated policy creates conflicting
   sources of truth at any length.
+
+## D-004: Durable reviewer-finding reconciliation
+
+- **Date:** 2026-07-31
+- **Status:** Accepted
+- **Decision:** Reviewer-originated findings are persisted locally per PR and
+  reconciled before every verdict. Every previously Open finding requires
+  current evidence and an explicit disposition: Open, Fixed, Superseded, or
+  Not PR-unique.
+- **Rationale:** GitHub comment history alone does not preserve findings the
+  reviewer reported but did not post. Explicit reconciliation prevents a
+  finding from disappearing between re-review passes or being lost to a
+  truncated report.

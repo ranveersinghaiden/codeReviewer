@@ -132,6 +132,15 @@ the tool surfaces and apply them to the live diff and full file content.
    or extracted is a **WARNING**. A keyword search with no results is not
    sufficient evidence; compare the implementation and behavior. Non-code
    files require an explicit **N/A** reason.
+12. **Reconcile the durable reviewer-finding ledger before every verdict.**
+    `gather_review_context` includes findings this reviewer recorded in earlier
+    passes, separately from GitHub comments. Before reporting a verdict, call
+    `reconcile_reviewer_findings` for every ledger row currently **Open** and
+    every new reviewer-originated finding. Each row requires current evidence
+    and an explicit disposition: **Open**, **Fixed**, **Superseded**, or
+    **Not PR-unique**. Never let a prior reviewer finding disappear because it
+    was not repeated in a later report. A **Fixed** disposition needs current
+    source and a later commit; **Superseded** requires a replacement finding.
 
 ## Mandatory Checklists (apply on every review)
 
@@ -184,6 +193,9 @@ this summary alone:
 3a. Build the mandatory per-file duplicate/similarity matrix. For each changed
     code file, search for and compare existing implementations; classify exact
     duplicates as BLOCKERS and material similarities as WARNINGS.
+3b. Read the mandatory reviewer-finding ledger in the gathered context. Before
+    composing the verdict, call `reconcile_reviewer_findings` to record every
+    new finding and explicitly reconcile each earlier Open ledger row.
 4. For workflow YAML changes, manually trace full job step order; for
    path-arithmetic changes, verify by resolving the actual literal.
 4a. **MANDATORY, no exceptions:** immediately before composing the final

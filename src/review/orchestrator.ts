@@ -1,6 +1,7 @@
 import type { PrReviewComment } from "./collectors/github.js";
 import { buildReviewEvidence } from "./checks.js";
-import { formatDuplicateSimilarityMatrix, formatPriorFeedbackMatrix } from "./report.js";
+import { formatDuplicateSimilarityMatrix, formatPriorFeedbackMatrix, formatReviewerFindingLedger } from "./report.js";
+import type { ReviewerFindingRecord } from "./findingsLedger.js";
 import type { ChangedFileTarget, ReviewEvidence } from "./types.js";
 
 export function collectReviewEvidence(
@@ -10,9 +11,13 @@ export function collectReviewEvidence(
   return buildReviewEvidence(priorReviewComments, changedFiles);
 }
 
-export function formatReviewEvidence(evidence: ReviewEvidence): string[] {
+export function formatReviewEvidence(
+  evidence: ReviewEvidence,
+  reviewerFindings: ReviewerFindingRecord[]
+): string[] {
   return [
     ...formatPriorFeedbackMatrix(evidence.priorFeedback),
     ...formatDuplicateSimilarityMatrix(evidence.duplicateSimilarity),
+    ...formatReviewerFindingLedger(reviewerFindings),
   ];
 }
