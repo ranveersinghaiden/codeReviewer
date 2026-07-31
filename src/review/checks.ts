@@ -48,7 +48,7 @@ export function findWorkflowShellStructuralFindings(content: string): WorkflowSh
   const findings: WorkflowShellFinding[] = [];
 
   for (const block of extractRunBlocks(content)) {
-    const openIfs: ShellLine[] = [];
+    const openIfs: { line: ShellLine; sawThen: boolean }[] = [];
     const bareTests: ShellLine[] = [];
     const openHeredocs: { delimiter: string; line: number }[] = [];
 
@@ -66,12 +66,30 @@ export function findWorkflowShellStructuralFindings(content: string): WorkflowSh
       }
 
       if (/^if\b/.test(line.text)) {
-        openIfs.push(line);
+        openIfs.push({
+          line,
+          sawThen: /\bthen(?:\s|;|$)/.test(line.text),
+        });
+        continue;
+      }
+
+      if (/^then(?:\s|;|$)/.test(line.text)) {
+        const openIf = openIfs.at(-1);
+        if (openIf) {
+          openIf.sawThen = true;
+        }
         continue;
       }
 
       if (/^fi(?:\s|;|$)/.test(line.text)) {
-        if (openIfs.pop()) {
+        const openIf = openIfs.pop();
+        if (openIf) {
+          if (!openIf.sawThen) {
+            findings.push({
+              line: openIf.line.line,
+              message: `Conditional "if" is missing "then" before "fi" on line ${line.line}.`,
+            });
+          }
           bareTests.length = 0;
           continue;
         }
@@ -98,7 +116,7 @@ export function findWorkflowShellStructuralFindings(content: string): WorkflowSh
     }
 
     for (const openIf of openIfs) {
-      findings.push({ line: openIf.line, message: 'Unclosed "if" block: missing matching "fi".' });
+      findings.push({ line: openIf.line.line, message: 'Unclosed "if" block: missing matching "fi".' });
     }
     for (const heredoc of openHeredocs) {
       findings.push({
