@@ -6,6 +6,7 @@ import { z } from "zod";
 import {
   ensureGhAvailable,
   fetchPrMeta,
+  fetchPrComparison,
   fetchPrDiff,
   fetchPrReviews,
   fetchPrReviewComments,
@@ -17,11 +18,13 @@ import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";
 import {
   getReviewerFindings,
   getReviewerReviewRound,
+  getReviewerReviewSnapshot,
   reconcileReviewerFindings,
   type FindingDisposition,
   type ReviewerFindingInput,
 } from "./review/findingsLedger.js";
 import { buildReviewPayload } from "./reviewPayload.js";
+import { classifyChangedFiles } from "./scope.js";
 
 // This MCP server is strictly READ-ONLY: it never runs `git commit`/`git push`/
 // `gh pr create`/`gh pr merge`/`gh api ... reviews` or any other write action,
@@ -44,7 +47,7 @@ const prIdentifierShape = {
 };
 
 const gatherReviewContextDescription =
-  "Collects a read-only PR review bundle: prior reviews and inline feedback, durable reviewer-originated findings, commits, metadata, diff, full changed-file content, matching instructions, and scope/framework-file flags. It includes review evidence and applicable static-review guidance. The tool never executes PR code or posts to GitHub; the calling reviewer applies the agent contract and presents the final report.";
+  "Collects a read-only PR review bundle: prior reviews and inline feedback, durable reviewer-originated findings, commits, metadata, a full or safe delta diff, changed-file content, matching instructions, and scope/framework-file flags. Delta mode is used only for a complete comparison since the prior finalized head with no protected/framework changes, and cannot approve a PR. The tool never executes PR code or posts to GitHub.";
 
 server.registerTool(
   "fetch_pr",
@@ -101,16 +104,51 @@ server.registerTool(
     const meta = await fetchPrMeta(owner, repo, pr_number);
     const checkout = await checkoutPrWorktree(owner, repo, pr_number);
     try {
-      const diff = await fetchPrDiff(owner, repo, pr_number);
-      const priorReviews = await fetchPrReviews(owner, repo, pr_number);
-      const [priorReviewComments, commits] = await Promise.all([
+      const [priorReviews, priorReviewComments, commits, reviewerFindings, reviewRound, previousSnapshot] =
+        await Promise.all([
+          fetchPrReviews(owner, repo, pr_number),
         fetchPrReviewComments(owner, repo, pr_number),
         fetchPrCommits(owner, repo, pr_number),
-      ]);
-      const [reviewerFindings, reviewRound] = await Promise.all([
-        getReviewerFindings(owner, repo, pr_number),
-        getReviewerReviewRound(owner, repo, pr_number),
-      ]);
+          getReviewerFindings(owner, repo, pr_number),
+          getReviewerReviewRound(owner, repo, pr_number),
+          getReviewerReviewSnapshot(owner, repo, pr_number),
+        ]);
+      let diff: string;
+      let reviewScope;
+      const canCompareFromPreviousHead =
+        previousSnapshot?.baseSha === meta.baseRefOid &&
+        previousSnapshot.headSha !== meta.headRefOid &&
+        previousSnapshot.baseSha.length > 0;
+      const comparison = canCompareFromPreviousHead
+        ? await fetchPrComparison(owner, repo, previousSnapshot.headSha, meta.headRefOid)
+        : null;
+      const comparisonTouchesProtectedSurface =
+        comparison !== null &&
+        classifyChangedFiles(comparison.changedPaths).some(
+          (file) =>
+            file.isFrameworkFile ||
+            file.path.startsWith(".github/agents/") ||
+            file.path.startsWith(".github/instructions/") ||
+            file.path.startsWith(".github/skills/")
+        );
+
+      if (comparison && !comparisonTouchesProtectedSurface) {
+        diff = comparison.diff;
+        reviewScope = {
+          mode: "delta" as const,
+          baselineHead: previousSnapshot?.headSha ?? null,
+          changedPaths: comparison.changedPaths,
+          requiresFullBeforeApproval: true,
+        };
+      } else {
+        diff = await fetchPrDiff(owner, repo, pr_number);
+        reviewScope = {
+          mode: "full" as const,
+          baselineHead: null,
+          changedPaths: meta.files.map((file) => file.path),
+          requiresFullBeforeApproval: false,
+        };
+      }
       const ctx = await gatherReviewContext(
         checkout.worktreePath,
         meta,
@@ -119,7 +157,8 @@ server.registerTool(
         priorReviewComments,
         commits,
         reviewerFindings,
-        reviewRound
+        reviewRound,
+        reviewScope
       );
       return { content: [{ type: "text", text: formatReviewContext(ctx) }] };
     } finally {
@@ -134,6 +173,7 @@ const findingDispositionShape = z.enum([
   "Superseded",
   "Not PR-unique",
 ]) satisfies z.ZodType<FindingDisposition>;
+const reviewModeShape = z.enum(["full", "delta"]);
 
 const reviewerFindingInputShape = z.object({
   severity: z.enum(["BLOCKER", "WARNING", "SUGGESTION"]),
@@ -152,6 +192,7 @@ server.registerTool(
     inputSchema: {
       ...prIdentifierShape,
       head_sha: z.string().min(7).describe("Current PR head SHA reviewed in this pass."),
+      review_mode: reviewModeShape.describe("Use the review scope reported by gather_review_context."),
       reconciliations: z
         .array(
           z.object({
@@ -164,7 +205,7 @@ server.registerTool(
         .describe("Every prior Open ledger finding plus each new reviewer-originated finding."),
     },
   },
-  async ({ owner, repo, pr_number, head_sha, reconciliations }) => {
+  async ({ owner, repo, pr_number, head_sha, review_mode, reconciliations }) => {
     await ensureGhAvailable();
     const [meta, reviews] = await Promise.all([
       fetchPrMeta(owner, repo, pr_number),
@@ -182,8 +223,10 @@ server.registerTool(
       head_sha,
       {
         headSha: meta.headRefOid,
+        baseSha: meta.baseRefOid,
         reviewIds: reviews.map((review) => review.id),
         capturedAt: new Date().toISOString(),
+        reviewMode: review_mode,
       },
       reconciliations.map((reconciliation) => ({
         id: reconciliation.ledger_id,

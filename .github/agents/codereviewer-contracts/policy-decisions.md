@@ -70,3 +70,17 @@ entry explicitly supersedes them.
   reviewer provides concise console progress at material phases.
 - **Rationale:** The user needs direct visibility into review activity and
   should not have to wait for an opaque background handoff.
+
+## D-006: Safe delta re-reviews
+
+- **Date:** 2026-07-31
+- **Status:** Accepted
+- **Decision:** Re-reviews may use a delta comparison only when it is complete
+  from the last finalized head, the PR base SHA is unchanged, and the delta
+  does not touch protected/framework files or reviewer contracts. A delta
+  review still reconciles all live GitHub feedback and Open ledger findings.
+  It is not eligible to approve; a full current base-to-head pass is required
+  before merge approval.
+- **Rationale:** Re-reading unchanged large PR surfaces is slow without adding
+  review value. The explicit comparison and escalation conditions retain the
+  safety checks that catch broad framework, workflow, and instruction changes.

@@ -10,6 +10,7 @@ export interface PrMeta {
   title: string;
   body: string;
   baseRefName: string;
+  baseRefOid: string;
   headRefName: string;
   headRepositoryOwner: string;
   isCrossRepository: boolean;
@@ -55,6 +56,11 @@ export interface PrCommit {
   sha: string;
   committedDate: string;
   message: string;
+}
+
+export interface PrComparison {
+  changedPaths: string[];
+  diff: string;
 }
 
 interface ReviewThreadCommentState {
@@ -111,7 +117,7 @@ export async function fetchPrMeta(
     "--repo",
     `${owner}/${repo}`,
     "--json",
-    "title,body,baseRefName,headRefName,headRepositoryOwner,isCrossRepository,headRefOid,files,labels",
+    "title,body,baseRefName,baseRefOid,headRefName,headRepositoryOwner,isCrossRepository,headRefOid,files,labels",
   ]);
   const json = JSON.parse(stdout);
   return {
@@ -121,6 +127,7 @@ export async function fetchPrMeta(
     title: json.title ?? "",
     body: json.body ?? "",
     baseRefName: json.baseRefName,
+    baseRefOid: json.baseRefOid ?? "",
     headRefName: json.headRefName,
     headRepositoryOwner: json.headRepositoryOwner?.login ?? owner,
     isCrossRepository: !!json.isCrossRepository,
@@ -147,6 +154,34 @@ export async function fetchPrDiff(
     "--repo",
     `${owner}/${repo}`,
   ]);
+}
+
+/**
+ * Returns the exact comparison from a previously finalized head to the
+ * current head. A null result means the range is incomplete or diverged and
+ * must be reviewed base-to-head instead.
+ */
+export async function fetchPrComparison(
+  owner: string,
+  repo: string,
+  baseSha: string,
+  headSha: string
+): Promise<PrComparison | null> {
+  const endpoint = `repos/${owner}/${repo}/compare/${baseSha}...${headSha}`;
+  const comparison = JSON.parse(await run("gh", ["api", endpoint]));
+  const files = comparison.files ?? [];
+  if (
+    !["ahead", "identical"].includes(comparison.status) ||
+    comparison.total_commits > 250 ||
+    files.length >= 300
+  ) {
+    return null;
+  }
+  const diff =
+    comparison.status === "identical"
+      ? ""
+      : await run("gh", ["api", "-H", "Accept: application/vnd.github.v3.diff", endpoint]);
+  return { changedPaths: files.map((file: { filename: string }) => file.filename), diff };
 }
 
 /**

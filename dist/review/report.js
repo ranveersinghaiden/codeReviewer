@@ -92,7 +92,8 @@ export function formatReviewerFindingLedger(findings) {
             "verdict, finalize every **Open** row through `finalize_reviewer_findings` with an explicit disposition: " +
             "**Open**, **Fixed**, **Superseded**, or **Not PR-unique**. The tool rejects a verdict workflow that omits " +
             "an earlier Open finding, refreshes the PR head and GitHub review-ID snapshot, and returns the only " +
-            "report-ready reviewer-finding set. Mark **Fixed** only with current source and later-commit evidence; use " +
+            "report-ready reviewer-finding set. Set `review_mode` from the gathered scope: a **delta** finalization " +
+            "is not approval eligible. Mark **Fixed** only with current source and later-commit evidence; use " +
             "**Superseded** only when a replacement finding is also recorded.",
         "",
     ];

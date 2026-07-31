@@ -17,28 +17,33 @@ async function loadLedger() {
     try {
         const parsed = JSON.parse(await readFile(LEDGER_PATH, "utf8"));
         if (parsed.version === 1 && parsed.findings) {
-            return { version: 3, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
+            return { version: 4, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
         }
-        if (parsed.version === 2 && parsed.findings && parsed.reviewSnapshots) {
+        if ((parsed.version === 2 || parsed.version === 3) && parsed.findings && parsed.reviewSnapshots) {
             const reviewSnapshots = Object.fromEntries(Object.entries(parsed.reviewSnapshots).map(([key, snapshot]) => [
                 key,
-                { ...snapshot, reviewRound: snapshot.reviewRound ?? 1 },
+                {
+                    ...snapshot,
+                    baseSha: snapshot.baseSha ?? "",
+                    reviewMode: snapshot.reviewMode ?? "full",
+                    reviewRound: snapshot.reviewRound ?? 1,
+                },
             ]));
             return {
-                version: 3,
+                version: 4,
                 findings: parsed.findings,
                 reviewSnapshots,
                 reviewRounds: Object.fromEntries(Object.entries(reviewSnapshots).map(([key, snapshot]) => [key, snapshot.reviewRound])),
             };
         }
-        if (parsed.version !== 3 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
+        if (parsed.version !== 4 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
             throw new Error(`Unsupported reviewer-finding ledger format at ${LEDGER_PATH}.`);
         }
         return parsed;
     }
     catch (error) {
         if (error.code === "ENOENT") {
-            return { version: 3, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
+            return { version: 4, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
         }
         throw error;
     }
@@ -56,6 +61,10 @@ export async function getReviewerFindings(owner, repo, prNumber) {
 export async function getReviewerReviewRound(owner, repo, prNumber) {
     const ledger = await loadLedger();
     return ledger.reviewRounds[prKey(owner, repo, prNumber)] ?? 0;
+}
+export async function getReviewerReviewSnapshot(owner, repo, prNumber) {
+    const ledger = await loadLedger();
+    return ledger.reviewSnapshots[prKey(owner, repo, prNumber)] ?? null;
 }
 export async function reconcileReviewerFindings(owner, repo, prNumber, headSha, reviewSnapshot, reconciliations) {
     if (reviewSnapshot.headSha !== headSha) {
@@ -128,5 +137,6 @@ export async function reconcileReviewerFindings(owner, repo, prNumber, headSha, 
         findings: existing,
         openFindings: existing.filter((finding) => finding.disposition === "Open"),
         reviewSnapshot: finalizedSnapshot,
+        approvalEligible: finalizedSnapshot.reviewMode === "full",
     };
 }

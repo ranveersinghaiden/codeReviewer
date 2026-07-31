@@ -24,7 +24,7 @@ export interface ReviewerFindingRecord extends ReviewerFindingInput {
 }
 
 interface FindingsLedger {
-  version: 3;
+  version: 4;
   findings: Record<string, ReviewerFindingRecord[]>;
   reviewSnapshots: Record<string, ReviewSnapshot>;
   reviewRounds: Record<string, number>;
@@ -33,16 +33,30 @@ interface FindingsLedger {
 interface PersistedFindingsLedger {
   version?: number;
   findings?: Record<string, ReviewerFindingRecord[]>;
-  reviewSnapshots?: Record<string, Omit<ReviewSnapshot, "reviewRound"> & { reviewRound?: number }>;
+  reviewSnapshots?: Record<
+    string,
+    {
+      headSha: string;
+      baseSha?: string;
+      reviewIds: number[];
+      capturedAt: string;
+      reviewRound?: number;
+      reviewMode?: ReviewMode;
+    }
+  >;
   reviewRounds?: Record<string, number>;
 }
 
 export interface ReviewSnapshot {
   headSha: string;
+  baseSha: string;
   reviewIds: number[];
   capturedAt: string;
   reviewRound: number;
+  reviewMode: ReviewMode;
 }
+
+export type ReviewMode = "full" | "delta";
 
 const LEDGER_PATH = path.join(os.homedir(), ".copilot", "code-reviewer", "review-findings.json");
 
@@ -62,17 +76,22 @@ async function loadLedger(): Promise<FindingsLedger> {
   try {
     const parsed = JSON.parse(await readFile(LEDGER_PATH, "utf8")) as PersistedFindingsLedger;
     if (parsed.version === 1 && parsed.findings) {
-      return { version: 3, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
+      return { version: 4, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
     }
-    if (parsed.version === 2 && parsed.findings && parsed.reviewSnapshots) {
+    if ((parsed.version === 2 || parsed.version === 3) && parsed.findings && parsed.reviewSnapshots) {
       const reviewSnapshots = Object.fromEntries(
         Object.entries(parsed.reviewSnapshots).map(([key, snapshot]) => [
           key,
-          { ...snapshot, reviewRound: snapshot.reviewRound ?? 1 },
+          {
+            ...snapshot,
+            baseSha: snapshot.baseSha ?? "",
+            reviewMode: snapshot.reviewMode ?? "full",
+            reviewRound: snapshot.reviewRound ?? 1,
+          },
         ])
       );
       return {
-        version: 3,
+        version: 4,
         findings: parsed.findings,
         reviewSnapshots,
         reviewRounds: Object.fromEntries(
@@ -80,13 +99,13 @@ async function loadLedger(): Promise<FindingsLedger> {
         ),
       };
     }
-    if (parsed.version !== 3 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
+    if (parsed.version !== 4 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
       throw new Error(`Unsupported reviewer-finding ledger format at ${LEDGER_PATH}.`);
     }
     return parsed as FindingsLedger;
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { version: 3, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
+      return { version: 4, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
     }
     throw error;
   }
@@ -113,6 +132,15 @@ export async function getReviewerReviewRound(owner: string, repo: string, prNumb
   return ledger.reviewRounds[prKey(owner, repo, prNumber)] ?? 0;
 }
 
+export async function getReviewerReviewSnapshot(
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<ReviewSnapshot | null> {
+  const ledger = await loadLedger();
+  return ledger.reviewSnapshots[prKey(owner, repo, prNumber)] ?? null;
+}
+
 export interface FindingReconciliation {
   id?: string;
   disposition: FindingDisposition;
@@ -124,6 +152,7 @@ export interface ReviewerFindingFinalization {
   findings: ReviewerFindingRecord[];
   openFindings: ReviewerFindingRecord[];
   reviewSnapshot: ReviewSnapshot;
+  approvalEligible: boolean;
 }
 
 export async function reconcileReviewerFindings(
@@ -215,5 +244,6 @@ export async function reconcileReviewerFindings(
     findings: existing,
     openFindings: existing.filter((finding) => finding.disposition === "Open"),
     reviewSnapshot: finalizedSnapshot,
+    approvalEligible: finalizedSnapshot.reviewMode === "full",
   };
 }

@@ -17,6 +17,13 @@ export interface SkillDoc {
   content: string | null;
 }
 
+export interface ReviewScope {
+  mode: "full" | "delta";
+  baselineHead: string | null;
+  changedPaths: string[];
+  requiresFullBeforeApproval: boolean;
+}
+
 export interface ReviewContext {
   meta: PrMeta;
   diff: string;
@@ -28,6 +35,7 @@ export interface ReviewContext {
   priorReviewComments: PrReviewComment[];
   reviewerFindings: ReviewerFindingRecord[];
   reviewRound: number;
+  reviewScope: ReviewScope;
   isAutofixPr: boolean;
   commitsSincePriorReviews: PrCommit[];
 }
@@ -65,9 +73,15 @@ export async function gatherReviewContext(
   priorReviewComments: PrReviewComment[] = [],
   commits: PrCommit[] = [],
   reviewerFindings: ReviewerFindingRecord[] = [],
-  reviewRound = 0
+  reviewRound = 0,
+  reviewScope: ReviewScope = {
+    mode: "full",
+    baselineHead: null,
+    changedPaths: meta.files.map((file) => file.path),
+    requiresFullBeforeApproval: false,
+  }
 ): Promise<ReviewContext> {
-  const changedPaths = meta.files.map((f) => f.path);
+  const changedPaths = reviewScope.changedPaths;
   const classifications = classifyChangedFiles(changedPaths);
   const outOfScopeFiles = detectOutOfScopeFiles(classifications);
   const isAutofixPr = meta.labels.some((l) => /^AI_AUTOFIX/i.test(l));
@@ -122,6 +136,7 @@ export async function gatherReviewContext(
     priorReviewComments,
     reviewerFindings,
     reviewRound,
+    reviewScope,
     isAutofixPr,
     commitsSincePriorReviews,
   };
@@ -133,6 +148,20 @@ export function formatReviewContext(ctx: ReviewContext): string {
   parts.push(`# Review Context: ${ctx.meta.owner}/${ctx.meta.repo}#${ctx.meta.number} — ${ctx.meta.title}`);
   parts.push(`Base: \`${ctx.meta.baseRefName}\`  Head: \`${ctx.meta.headRefName}\``);
   parts.push(`Completed reviewer finalization rounds: **${ctx.reviewRound}**`);
+  parts.push("");
+  parts.push("## Review Scope");
+  if (ctx.reviewScope.mode === "delta") {
+    parts.push(
+      `**DELTA REVIEW** from finalized head \`${ctx.reviewScope.baselineHead}\` to current head. ` +
+        "Analyze the supplied comparison diff, changed files, every open reviewer-ledger item, and every live " +
+        "prior-feedback row. This mode is faster but is **not eligible to APPROVE**; a full base-to-head review " +
+        "at the current head is required before merge approval."
+    );
+  } else {
+    parts.push(
+      "**FULL REVIEW** of the current base-to-head diff. This is the required mode before an approval/merge verdict."
+    );
+  }
   parts.push("");
   if (ctx.meta.body) {
     parts.push("## PR Description");

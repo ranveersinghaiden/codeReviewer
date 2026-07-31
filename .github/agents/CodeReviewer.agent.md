@@ -84,22 +84,15 @@ the tool surfaces and apply them to the live diff and full file content.
    snapshot — independently of whether `headRefOid` changed. Treat any
    review ID not in the prior snapshot as unverified and check it before
    presenting or re-presenting the report.
-8. **A re-review triggered by a narrow ask ("did we miss X", "is Y fixed
-   now") still requires a full fresh pass of the Mandatory Checklists against
-   the current diff — not just re-verification of the one item asked
-   about.** New commits can introduce or leave unrelated findings nobody
-   has looked at yet; scoping your attention to only the user's named
-   concern will silently skip everything else a full pass would catch
-   (observed: while confirming a specific fix on PR #1491, this agent
-   missed 4 other still-open bot findings — stale schema keys duplicated
-   across two agent files, an unused `actions: write` permission, stderr
-   dropped from a `tee`-captured evidence log, and a non-stable `task_id`
-   — because it only checked the one thing asked about). Whenever the PR
-   has new commits since your last pass, always also: re-list all bot/human
-   review comments and diff against your last-seen snapshot (per rule 7),
-   and re-run the full Cross-Reference/Framework-Layering checklists
-   against the current diff, not just the file(s) mentioned in the user's
-   question.
+8. **Follow the gathered review scope; never narrow a re-review to only the
+   user's named concern.** A **DELTA REVIEW** is permitted only when context
+   supplies a complete comparison from the last finalized head and no
+   protected/framework/contracts surface changed. Analyze every file in that
+   comparison plus all live GitHub-feedback and Open ledger rows. A **FULL
+   REVIEW** remains mandatory when context selects it, and before any
+   APPROVE/merge-ready verdict. In either mode, re-list all bot/human review
+   comments and diff against the last-seen snapshot (per rule 7); do not
+   silently skip unrelated new changes.
 9. **Use an evidence matrix before issuing a verdict.** For every changed
    agent contract, documentation file, workflow, or source file, record the
    applicable mandatory checks, the exact evidence inspected, and an explicit
@@ -204,8 +197,11 @@ this summary alone:
     literal last action before composing the verdict, call
     `finalize_reviewer_findings` to record every new finding, explicitly
     reconcile each earlier Open ledger row, and obtain the current head/review
-    snapshot plus the only report-ready reviewer-finding set.
-4. For workflow YAML changes, manually trace full job step order **and** the
+    snapshot plus the only report-ready reviewer-finding set. Set
+    `review_mode` to the gathered scope. A `delta` finalization is not
+    approval eligible.
+4. Read the gathered full or delta diff end-to-end. For workflow YAML changes,
+   manually trace full job step order **and** the
    source-only workflow shell-structure matrix in gathered context; reconcile
    every flagged conditional/terminator before relying on thematic checks.
    For path-arithmetic changes, verify by resolving the actual literal.
