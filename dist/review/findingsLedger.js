@@ -16,14 +16,29 @@ function fingerprint(finding) {
 async function loadLedger() {
     try {
         const parsed = JSON.parse(await readFile(LEDGER_PATH, "utf8"));
-        if (parsed.version !== 1 || !parsed.findings) {
+        if (parsed.version === 1 && parsed.findings) {
+            return { version: 3, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
+        }
+        if (parsed.version === 2 && parsed.findings && parsed.reviewSnapshots) {
+            const reviewSnapshots = Object.fromEntries(Object.entries(parsed.reviewSnapshots).map(([key, snapshot]) => [
+                key,
+                { ...snapshot, reviewRound: snapshot.reviewRound ?? 1 },
+            ]));
+            return {
+                version: 3,
+                findings: parsed.findings,
+                reviewSnapshots,
+                reviewRounds: Object.fromEntries(Object.entries(reviewSnapshots).map(([key, snapshot]) => [key, snapshot.reviewRound])),
+            };
+        }
+        if (parsed.version !== 3 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
             throw new Error(`Unsupported reviewer-finding ledger format at ${LEDGER_PATH}.`);
         }
         return parsed;
     }
     catch (error) {
         if (error.code === "ENOENT") {
-            return { version: 1, findings: {} };
+            return { version: 3, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
         }
         throw error;
     }
@@ -38,13 +53,22 @@ export async function getReviewerFindings(owner, repo, prNumber) {
     const ledger = await loadLedger();
     return ledger.findings[prKey(owner, repo, prNumber)] ?? [];
 }
-export async function reconcileReviewerFindings(owner, repo, prNumber, headSha, reconciliations) {
+export async function getReviewerReviewRound(owner, repo, prNumber) {
+    const ledger = await loadLedger();
+    return ledger.reviewRounds[prKey(owner, repo, prNumber)] ?? 0;
+}
+export async function reconcileReviewerFindings(owner, repo, prNumber, headSha, reviewSnapshot, reconciliations) {
+    if (reviewSnapshot.headSha !== headSha) {
+        throw new Error("Reviewer-finding finalization snapshot does not match the reviewed PR head.");
+    }
     const ledger = await loadLedger();
     const key = prKey(owner, repo, prNumber);
     const existing = ledger.findings[key] ?? [];
     const existingById = new Map(existing.map((finding) => [finding.id, finding]));
     const reconciledIds = new Set();
     const now = new Date().toISOString();
+    const reviewRound = (ledger.reviewRounds[key] ?? 0) + 1;
+    const finalizedSnapshot = { ...reviewSnapshot, reviewRound };
     for (const reconciliation of reconciliations) {
         if (!reconciliation.evidence.trim()) {
             throw new Error("Each reviewer-finding reconciliation requires current source or commit evidence.");
@@ -97,6 +121,12 @@ export async function reconcileReviewerFindings(owner, repo, prNumber, headSha, 
             .join(", ")}.`);
     }
     ledger.findings[key] = existing;
+    ledger.reviewSnapshots[key] = finalizedSnapshot;
+    ledger.reviewRounds[key] = reviewRound;
     await saveLedger(ledger);
-    return existing;
+    return {
+        findings: existing,
+        openFindings: existing.filter((finding) => finding.disposition === "Open"),
+        reviewSnapshot: finalizedSnapshot,
+    };
 }

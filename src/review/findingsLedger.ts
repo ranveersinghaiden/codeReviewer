@@ -24,8 +24,24 @@ export interface ReviewerFindingRecord extends ReviewerFindingInput {
 }
 
 interface FindingsLedger {
-  version: 1;
+  version: 3;
   findings: Record<string, ReviewerFindingRecord[]>;
+  reviewSnapshots: Record<string, ReviewSnapshot>;
+  reviewRounds: Record<string, number>;
+}
+
+interface PersistedFindingsLedger {
+  version?: number;
+  findings?: Record<string, ReviewerFindingRecord[]>;
+  reviewSnapshots?: Record<string, Omit<ReviewSnapshot, "reviewRound"> & { reviewRound?: number }>;
+  reviewRounds?: Record<string, number>;
+}
+
+export interface ReviewSnapshot {
+  headSha: string;
+  reviewIds: number[];
+  capturedAt: string;
+  reviewRound: number;
 }
 
 const LEDGER_PATH = path.join(os.homedir(), ".copilot", "code-reviewer", "review-findings.json");
@@ -44,14 +60,33 @@ function fingerprint(finding: ReviewerFindingInput): string {
 
 async function loadLedger(): Promise<FindingsLedger> {
   try {
-    const parsed = JSON.parse(await readFile(LEDGER_PATH, "utf8")) as FindingsLedger;
-    if (parsed.version !== 1 || !parsed.findings) {
+    const parsed = JSON.parse(await readFile(LEDGER_PATH, "utf8")) as PersistedFindingsLedger;
+    if (parsed.version === 1 && parsed.findings) {
+      return { version: 3, findings: parsed.findings, reviewSnapshots: {}, reviewRounds: {} };
+    }
+    if (parsed.version === 2 && parsed.findings && parsed.reviewSnapshots) {
+      const reviewSnapshots = Object.fromEntries(
+        Object.entries(parsed.reviewSnapshots).map(([key, snapshot]) => [
+          key,
+          { ...snapshot, reviewRound: snapshot.reviewRound ?? 1 },
+        ])
+      );
+      return {
+        version: 3,
+        findings: parsed.findings,
+        reviewSnapshots,
+        reviewRounds: Object.fromEntries(
+          Object.entries(reviewSnapshots).map(([key, snapshot]) => [key, snapshot.reviewRound])
+        ),
+      };
+    }
+    if (parsed.version !== 3 || !parsed.findings || !parsed.reviewSnapshots || !parsed.reviewRounds) {
       throw new Error(`Unsupported reviewer-finding ledger format at ${LEDGER_PATH}.`);
     }
-    return parsed;
+    return parsed as FindingsLedger;
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { version: 1, findings: {} };
+      return { version: 3, findings: {}, reviewSnapshots: {}, reviewRounds: {} };
     }
     throw error;
   }
@@ -73,6 +108,11 @@ export async function getReviewerFindings(
   return ledger.findings[prKey(owner, repo, prNumber)] ?? [];
 }
 
+export async function getReviewerReviewRound(owner: string, repo: string, prNumber: number): Promise<number> {
+  const ledger = await loadLedger();
+  return ledger.reviewRounds[prKey(owner, repo, prNumber)] ?? 0;
+}
+
 export interface FindingReconciliation {
   id?: string;
   disposition: FindingDisposition;
@@ -80,19 +120,31 @@ export interface FindingReconciliation {
   finding?: ReviewerFindingInput;
 }
 
+export interface ReviewerFindingFinalization {
+  findings: ReviewerFindingRecord[];
+  openFindings: ReviewerFindingRecord[];
+  reviewSnapshot: ReviewSnapshot;
+}
+
 export async function reconcileReviewerFindings(
   owner: string,
   repo: string,
   prNumber: number,
   headSha: string,
+  reviewSnapshot: Omit<ReviewSnapshot, "reviewRound">,
   reconciliations: FindingReconciliation[]
-): Promise<ReviewerFindingRecord[]> {
+): Promise<ReviewerFindingFinalization> {
+  if (reviewSnapshot.headSha !== headSha) {
+    throw new Error("Reviewer-finding finalization snapshot does not match the reviewed PR head.");
+  }
   const ledger = await loadLedger();
   const key = prKey(owner, repo, prNumber);
   const existing = ledger.findings[key] ?? [];
   const existingById = new Map(existing.map((finding) => [finding.id, finding]));
   const reconciledIds = new Set<string>();
   const now = new Date().toISOString();
+  const reviewRound = (ledger.reviewRounds[key] ?? 0) + 1;
+  const finalizedSnapshot: ReviewSnapshot = { ...reviewSnapshot, reviewRound };
 
   for (const reconciliation of reconciliations) {
     if (!reconciliation.evidence.trim()) {
@@ -156,6 +208,12 @@ export async function reconcileReviewerFindings(
   }
 
   ledger.findings[key] = existing;
+  ledger.reviewSnapshots[key] = finalizedSnapshot;
+  ledger.reviewRounds[key] = reviewRound;
   await saveLedger(ledger);
-  return existing;
+  return {
+    findings: existing,
+    openFindings: existing.filter((finding) => finding.disposition === "Open"),
+    reviewSnapshot: finalizedSnapshot,
+  };
 }

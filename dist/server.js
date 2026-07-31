@@ -6,7 +6,7 @@ import { ensureGhAvailable, fetchPrMeta, fetchPrDiff, fetchPrReviews, fetchPrRev
 import { checkoutPrWorktree, cleanupWorktree } from "./worktree.js";
 import { loadInstructions, formatInstructionsContext } from "./instructions.js";
 import { gatherReviewContext, formatReviewContext } from "./reviewContext.js";
-import { getReviewerFindings, reconcileReviewerFindings, } from "./review/findingsLedger.js";
+import { getReviewerFindings, getReviewerReviewRound, reconcileReviewerFindings, } from "./review/findingsLedger.js";
 import { buildReviewPayload } from "./reviewPayload.js";
 // This MCP server is strictly READ-ONLY: it never runs `git commit`/`git push`/
 // `gh pr create`/`gh pr merge`/`gh api ... reviews` or any other write action,
@@ -73,8 +73,11 @@ server.registerTool("gather_review_context", {
             fetchPrReviewComments(owner, repo, pr_number),
             fetchPrCommits(owner, repo, pr_number),
         ]);
-        const reviewerFindings = await getReviewerFindings(owner, repo, pr_number);
-        const ctx = await gatherReviewContext(checkout.worktreePath, meta, diff, priorReviews, priorReviewComments, commits, reviewerFindings);
+        const [reviewerFindings, reviewRound] = await Promise.all([
+            getReviewerFindings(owner, repo, pr_number),
+            getReviewerReviewRound(owner, repo, pr_number),
+        ]);
+        const ctx = await gatherReviewContext(checkout.worktreePath, meta, diff, priorReviews, priorReviewComments, commits, reviewerFindings, reviewRound);
         return { content: [{ type: "text", text: formatReviewContext(ctx) }] };
     }
     finally {
@@ -94,9 +97,9 @@ const reviewerFindingInputShape = z.object({
     message: z.string().min(1).describe("Concise finding statement used for its stable fingerprint."),
     recommendation: z.string().min(1).describe("Concrete remediation."),
 });
-server.registerTool("reconcile_reviewer_findings", {
-    title: "Reconcile durable reviewer findings (local only)",
-    description: "Records this review pass's reviewer-originated findings in the local PR ledger at ~/.copilot/code-reviewer/review-findings.json. Every previously Open ledger finding must be explicitly reconciled as Open, Fixed, Superseded, or Not PR-unique with current evidence; the tool rejects omissions. Existing findings are updated by ledger_id. New findings omit ledger_id and supply finding. This never changes the PR or posts to GitHub.",
+server.registerTool("finalize_reviewer_findings", {
+    title: "Finalize durable reviewer findings (local only)",
+    description: "Final review gate for the local reviewer-finding ledger at ~/.copilot/code-reviewer/review-findings.json. Immediately re-fetches the PR head and GitHub review IDs, rejects a stale supplied head, then atomically records this pass's reconciliations and returns the report-ready Open findings plus exact snapshot. Every previously Open ledger finding must be explicitly reconciled as Open, Fixed, Superseded, or Not PR-unique with current evidence; omissions are rejected. Existing findings use ledger_id; new findings omit it and supply finding. This never changes the PR or posts to GitHub.",
     inputSchema: {
         ...prIdentifierShape,
         head_sha: z.string().min(7).describe("Current PR head SHA reviewed in this pass."),
@@ -110,7 +113,19 @@ server.registerTool("reconcile_reviewer_findings", {
             .describe("Every prior Open ledger finding plus each new reviewer-originated finding."),
     },
 }, async ({ owner, repo, pr_number, head_sha, reconciliations }) => {
-    const findings = await reconcileReviewerFindings(owner, repo, pr_number, head_sha, reconciliations.map((reconciliation) => ({
+    await ensureGhAvailable();
+    const [meta, reviews] = await Promise.all([
+        fetchPrMeta(owner, repo, pr_number),
+        fetchPrReviews(owner, repo, pr_number),
+    ]);
+    if (meta.headRefOid !== head_sha) {
+        throw new Error(`PR head changed during review: reviewed ${head_sha}, current ${meta.headRefOid}. Gather context again before finalizing.`);
+    }
+    const result = await reconcileReviewerFindings(owner, repo, pr_number, head_sha, {
+        headSha: meta.headRefOid,
+        reviewIds: reviews.map((review) => review.id),
+        capturedAt: new Date().toISOString(),
+    }, reconciliations.map((reconciliation) => ({
         id: reconciliation.ledger_id,
         disposition: reconciliation.disposition,
         evidence: reconciliation.evidence,
@@ -120,7 +135,7 @@ server.registerTool("reconcile_reviewer_findings", {
         content: [
             {
                 type: "text",
-                text: JSON.stringify({ findings }, null, 2),
+                text: JSON.stringify(result, null, 2),
             },
         ],
     };

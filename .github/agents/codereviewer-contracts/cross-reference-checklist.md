@@ -53,6 +53,12 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
   directly into a `run:` shell body, is a BLOCKER — require `env:` +
   quoted `"$VAR"` instead, even for values that look "internal." Also check
   CLI-arg validation regexes reject a leading `-`/`--` (option-injection).
+- **Workflow shell structure**: for every changed workflow, inspect the
+  source-only `run: |` structure matrix emitted by review context before any
+  thematic workflow analysis. Trace each flagged conditional, `then`/`fi`,
+  `else`/`elif`, grouping brace, and heredoc terminator in the full block.
+  A missing control keyword or unmatched terminator is a BLOCKER; do not
+  dismiss it because interpolation, permissions, or step-order checks pass.
 - **Execution evidence (static-only reviewer)**: do not execute PR code.
   Where repository policy requires runtime proof, inspect linked CI/manual
   evidence or request it from the author. For an AI_AUTOFIX test-fix claim,

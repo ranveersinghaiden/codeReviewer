@@ -27,7 +27,7 @@ async function readFileSafe(fullPath) {
  * and any out-of-scope / framework-file flags. Performs no execution and posts
  * nothing — purely read/gather.
  */
-export async function gatherReviewContext(worktreePath, meta, diff, priorReviews = [], priorReviewComments = [], commits = [], reviewerFindings = []) {
+export async function gatherReviewContext(worktreePath, meta, diff, priorReviews = [], priorReviewComments = [], commits = [], reviewerFindings = [], reviewRound = 0) {
     const changedPaths = meta.files.map((f) => f.path);
     const classifications = classifyChangedFiles(changedPaths);
     const outOfScopeFiles = detectOutOfScopeFiles(classifications);
@@ -69,6 +69,7 @@ export async function gatherReviewContext(worktreePath, meta, diff, priorReviews
         priorReviews,
         priorReviewComments,
         reviewerFindings,
+        reviewRound,
         isAutofixPr,
         commitsSincePriorReviews,
     };
@@ -78,6 +79,7 @@ export function formatReviewContext(ctx) {
     const parts = [];
     parts.push(`# Review Context: ${ctx.meta.owner}/${ctx.meta.repo}#${ctx.meta.number} — ${ctx.meta.title}`);
     parts.push(`Base: \`${ctx.meta.baseRefName}\`  Head: \`${ctx.meta.headRefName}\``);
+    parts.push(`Completed reviewer finalization rounds: **${ctx.reviewRound}**`);
     parts.push("");
     if (ctx.meta.body) {
         parts.push("## PR Description");
@@ -117,7 +119,11 @@ export function formatReviewContext(ctx) {
         parts.push("(none found — this is the first review on this PR)");
         parts.push("");
     }
-    const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
+    const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles.map((file) => ({
+        path: file.path,
+        content: file.fullContent,
+        truncated: file.truncated,
+    })));
     parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
     if (ctx.isAutofixPr) {
         parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");

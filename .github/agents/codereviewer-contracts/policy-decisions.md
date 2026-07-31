@@ -57,3 +57,16 @@ entry explicitly supersedes them.
   reviewer reported but did not post. Explicit reconciliation prevents a
   finding from disappearing between re-review passes or being lost to a
   truncated report.
+
+- **Review-round count:** Each successful finalization increments a durable
+  per-PR review-round counter. Use it to report the number of complete review
+  passes recorded by the reviewer; do not infer rounds from comments or commits.
+
+## D-005: Visible synchronous review execution
+
+- **Date:** 2026-07-31
+- **Status:** Accepted
+- **Decision:** PR reviews run synchronously, not in background tasks. The
+  reviewer provides concise console progress at material phases.
+- **Rationale:** The user needs direct visibility into review activity and
+  should not have to wait for an opaque background handoff.

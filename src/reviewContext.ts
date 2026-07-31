@@ -27,6 +27,7 @@ export interface ReviewContext {
   priorReviews: PrReview[];
   priorReviewComments: PrReviewComment[];
   reviewerFindings: ReviewerFindingRecord[];
+  reviewRound: number;
   isAutofixPr: boolean;
   commitsSincePriorReviews: PrCommit[];
 }
@@ -63,7 +64,8 @@ export async function gatherReviewContext(
   priorReviews: PrReview[] = [],
   priorReviewComments: PrReviewComment[] = [],
   commits: PrCommit[] = [],
-  reviewerFindings: ReviewerFindingRecord[] = []
+  reviewerFindings: ReviewerFindingRecord[] = [],
+  reviewRound = 0
 ): Promise<ReviewContext> {
   const changedPaths = meta.files.map((f) => f.path);
   const classifications = classifyChangedFiles(changedPaths);
@@ -119,6 +121,7 @@ export async function gatherReviewContext(
     priorReviews,
     priorReviewComments,
     reviewerFindings,
+    reviewRound,
     isAutofixPr,
     commitsSincePriorReviews,
   };
@@ -129,6 +132,7 @@ export function formatReviewContext(ctx: ReviewContext): string {
   const parts: string[] = [];
   parts.push(`# Review Context: ${ctx.meta.owner}/${ctx.meta.repo}#${ctx.meta.number} — ${ctx.meta.title}`);
   parts.push(`Base: \`${ctx.meta.baseRefName}\`  Head: \`${ctx.meta.headRefName}\``);
+  parts.push(`Completed reviewer finalization rounds: **${ctx.reviewRound}**`);
   parts.push("");
   if (ctx.meta.body) {
     parts.push("## PR Description");
@@ -176,7 +180,14 @@ export function formatReviewContext(ctx: ReviewContext): string {
     parts.push("");
   }
 
-  const evidence = collectReviewEvidence(ctx.priorReviewComments, ctx.changedFiles);
+  const evidence = collectReviewEvidence(
+    ctx.priorReviewComments,
+    ctx.changedFiles.map((file) => ({
+      path: file.path,
+      content: file.fullContent,
+      truncated: file.truncated,
+    }))
+  );
   parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
 
   if (ctx.isAutofixPr) {

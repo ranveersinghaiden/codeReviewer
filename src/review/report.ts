@@ -1,5 +1,5 @@
 import type { ReviewerFindingRecord } from "./findingsLedger.js";
-import type { DuplicateSimilarityCheck, PriorFeedbackCheck } from "./types.js";
+import type { DuplicateSimilarityCheck, PriorFeedbackCheck, WorkflowShellCheck } from "./types.js";
 
 function location(path: string, line: number | null): string {
   return path ? `\`${path}${line === null ? "" : `:${line}`}\`` : "(general)";
@@ -67,13 +67,41 @@ export function formatDuplicateSimilarityMatrix(checks: DuplicateSimilarityCheck
   return lines;
 }
 
+export function formatWorkflowShellMatrix(checks: WorkflowShellCheck[]): string[] {
+  if (checks.length === 0) return [];
+
+  const lines = [
+    "## Mandatory Workflow Shell Structure Check",
+    "The rows below are source-only structural analysis of changed `run: |` blocks; no PR code was executed. " +
+      "Every reported issue MUST be inspected against the full workflow and recorded through " +
+      "`finalize_reviewer_findings` unless it is demonstrably a false positive. Do not substitute a thematic " +
+      "workflow review for this matrix.",
+    "",
+    "| Workflow | Static result | Required final-report action |",
+    "| --- | --- | --- |",
+  ];
+  for (const check of checks) {
+    if (check.unavailableReason) {
+      lines.push(`| \`${check.path}\` | **INCOMPLETE** — ${check.unavailableReason} | Inspect manually |`);
+    } else if (check.findings.length === 0) {
+      lines.push(`| \`${check.path}\` | Passed structural scan | State inspected evidence |`);
+    } else {
+      const findings = check.findings.map((finding) => `line ${finding.line}: ${finding.message}`).join("<br>");
+      lines.push(`| \`${check.path}\` | **FINDINGS** — ${findings} | Reconcile each finding in the ledger |`);
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
 export function formatReviewerFindingLedger(findings: ReviewerFindingRecord[]): string[] {
   const lines = [
     "## Mandatory Reviewer-Finding Ledger",
     "These are findings made by this reviewer in earlier passes, separate from GitHub comments. Before issuing a " +
-      "verdict, reconcile every **Open** row through `reconcile_reviewer_findings` with an explicit disposition: " +
+      "verdict, finalize every **Open** row through `finalize_reviewer_findings` with an explicit disposition: " +
       "**Open**, **Fixed**, **Superseded**, or **Not PR-unique**. The tool rejects a verdict workflow that omits " +
-      "an earlier Open finding. Mark **Fixed** only with current source and later-commit evidence; use " +
+      "an earlier Open finding, refreshes the PR head and GitHub review-ID snapshot, and returns the only " +
+      "report-ready reviewer-finding set. Mark **Fixed** only with current source and later-commit evidence; use " +
       "**Superseded** only when a replacement finding is also recorded.",
     "",
   ];
