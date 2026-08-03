@@ -47,6 +47,18 @@ Apply on every review, referenced from `CodeReviewer.agent.md` Mandatory Checkli
   parameters as a SUGGESTION unless the repository’s enforced lint
   configuration elevates them. Do not let a low-severity hygiene finding
   substitute for the cross-reference checks above.
+- **Python entry-point importability**: for every changed `__main__.py`, inspect
+  the source-only Python entry-point importability matrix. When it imports its
+  local package absolutely, trace the documented clean-checkout invocation
+  through package metadata, bootstrap code, and `PYTHONPATH` setup. An entry
+  point that relies on an ambient local installation or cannot resolve its
+  own package from the supported invocation is a BLOCKER.
+- **Login credential retrieval**: for every changed login/authentication file,
+  inspect the source-only credential retrieval matrix and surrounding diff.
+  Confirm the username/password retrieval source, configuration key, secret
+  provider, and accessor are unchanged. A migration is a BLOCKER unless the
+  PR explicitly authorizes it and supplies validation evidence; never expose
+  credential values in the review report.
 - **Untrusted input reaching a shell**: any `${{ inputs.* }}` /
   `${{ github.event.* }}` / `${{ steps.*.outputs.* }}` value that originates
   from a workflow_dispatch input or PR-controlled data, interpolated

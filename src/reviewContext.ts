@@ -215,7 +215,8 @@ export function formatReviewContext(ctx: ReviewContext): string {
       path: file.path,
       content: file.fullContent,
       truncated: file.truncated,
-    }))
+    })),
+    ctx.diff
   );
   parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
 

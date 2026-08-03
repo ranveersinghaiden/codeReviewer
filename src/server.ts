@@ -96,7 +96,8 @@ server.registerTool(
   "gather_review_context",
   {
     title: "Gather deep review context for a PR (read-only)",
-    description: gatherReviewContextDescription,
+    description:
+      `${gatherReviewContextDescription} Python entry-point findings must be traced through documented clean-checkout packaging or bootstrap paths. Login/authentication changes must preserve username/password retrieval mechanisms unless an explicitly authorized, validated migration is documented.`,
     inputSchema: prIdentifierShape,
   },
   async ({ owner, repo, pr_number }) => {

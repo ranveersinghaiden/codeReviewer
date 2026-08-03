@@ -204,7 +204,11 @@ this summary alone:
    manually trace full job step order **and** the
    source-only workflow shell-structure matrix in gathered context; reconcile
    every flagged conditional/terminator before relying on thematic checks.
-   For path-arithmetic changes, verify by resolving the actual literal.
+   For changed Python entry points, trace every flagged local absolute import
+   through its documented clean-checkout packaging/bootstrap path. For
+   changed login/authentication files, reconcile every flagged username/password
+   retrieval-source change before issuing a verdict. For
+   path-arithmetic changes, verify by resolving the actual literal.
 4a. **MANDATORY, no exceptions:** immediately before composing the final
    report — and again immediately before re-presenting/re-delivering any
    verdict on a PR you've already reported on — run

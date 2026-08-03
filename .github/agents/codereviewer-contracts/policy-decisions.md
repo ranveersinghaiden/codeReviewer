@@ -84,3 +84,19 @@ entry explicitly supersedes them.
 - **Rationale:** Re-reading unchanged large PR surfaces is slow without adding
   review value. The explicit comparison and escalation conditions retain the
   safety checks that catch broad framework, workflow, and instruction changes.
+
+## D-007: Python entry-point importability evidence
+
+- **Date:** 2026-08-03
+- **Status:** Accepted
+- **Decision:** Changed Python `__main__.py` files receive a source-only importability matrix. Absolute imports of the entry point's local package require explicit reviewer evidence that the documented clean-checkout invocation provides packaging, bootstrap code, or `PYTHONPATH` setup.
+- **Rationale:** PR #16 added a nested Graphify skill whose absolute imports worked only in an ambient local installation. A diff review that examined imports without tracing invocation missed a clean-checkout `ModuleNotFoundError`.
+- **Consequence:** An unresolved local package import is a BLOCKER. The static reviewer inspects source, package metadata, and invocation documentation; it does not execute PR code.
+
+## D-008: Login credential retrieval preservation
+
+- **Date:** 2026-08-03
+- **Status:** Accepted
+- **Decision:** Every changed login/authentication file receives a source-only credential retrieval matrix. The reviewer compares base-to-head changes to username/password accessors, configuration keys, environment/property reads, and secret providers.
+- **Rationale:** Login feature work can silently redirect test credentials to a different source, breaking authentication or weakening secret handling without changing the visible login flow.
+- **Consequence:** A changed credential retrieval mechanism is a BLOCKER unless the PR explicitly authorizes the migration and includes validation evidence. Review reports must never expose credential values.

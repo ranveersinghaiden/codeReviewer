@@ -1,8 +1,11 @@
 import type { PrReviewComment } from "./collectors/github.js";
 import type {
   ChangedFileTarget,
+  CredentialRetrievalCheck,
   DuplicateSimilarityCheck,
   PriorFeedbackCheck,
+  PythonEntryPointImportCheck,
+  PythonEntryPointImportFinding,
   ReviewEvidence,
   WorkflowShellCheck,
   WorkflowShellFinding,
@@ -11,9 +14,14 @@ import type {
 const CODE_FILE_PATTERN =
   /\.(?:java|kt|kts|ts|tsx|js|jsx|mjs|cjs|py|rb|go|rs|cs|cpp|c|h|hpp|php|scala|groovy|sh|bash|zsh)$/i;
 const WORKFLOW_FILE_PATTERN = /^\.github\/workflows\/.+\.ya?ml$/;
+const PYTHON_ENTRY_POINT_PATTERN = /(?:^|\/)__main__\.py$/;
+const LOGIN_RELATED_PATTERN = /(?:login|log[-_ ]?in|sign[-_ ]?in|auth(?:entication)?|credential)/i;
 const RUN_BLOCK_PATTERN = /^(\s*)(?:-\s+)?run:\s*[>|][+-]?\s*(?:#.*)?$/;
 const BARE_TEST_PATTERN = /^\[\[?\s+.+\s+\]\]?\s*;\s*(?:then\s*)?$/;
 const HEREDOC_PATTERN = /<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?/g;
+const ABSOLUTE_IMPORT_PATTERN = /^\s*(?:from|import)\s+([A-Za-z_][A-Za-z0-9_]*)\b/;
+const CREDENTIAL_RETRIEVAL_PATTERN =
+  /(?:\b(?:get|fetch|read|load)[A-Za-z0-9_]*(?:username|password|credential|secret)|\b(?:username|password|credential|secret)[A-Za-z0-9_]*(?:get|fetch|read|load)|\b(?:System\.getenv|System\.getProperty|os\.environ|process\.env|config(?:uration)?\.(?:get|read)|secrets?\.(?:get|read)))/i;
 
 interface ShellLine {
   line: number;
@@ -129,13 +137,58 @@ export function findWorkflowShellStructuralFindings(content: string): WorkflowSh
   return findings;
 }
 
+export function findPythonEntryPointImportFindings(
+  path: string,
+  content: string
+): PythonEntryPointImportFinding[] {
+  if (!PYTHON_ENTRY_POINT_PATTERN.test(path)) return [];
+
+  const packageName = path.split("/").at(-2);
+  if (!packageName) return [];
+
+  return content.split(/\r?\n/).flatMap((text, index) => {
+    const importedPackage = text.match(ABSOLUTE_IMPORT_PATTERN)?.[1];
+    if (importedPackage !== packageName) return [];
+
+    return [{
+      line: index + 1,
+      message:
+        `Entry point imports its local "${packageName}" package absolutely. Verify a documented clean-checkout ` +
+        "packaging or bootstrap path makes this import resolvable from the supported invocation.",
+    }];
+  });
+}
+
+function collectCredentialRetrievalChanges(diff: string): Map<string, { added: number; removed: number }> {
+  const changes = new Map<string, { added: number; removed: number }>();
+  let path: string | null = null;
+
+  for (const line of diff.split(/\r?\n/)) {
+    const header = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+    if (header) {
+      path = header[2];
+      continue;
+    }
+    if (!path || !/^[+-]/.test(line) || /^(?:\+\+\+|---)/.test(line)) continue;
+    if (!CREDENTIAL_RETRIEVAL_PATTERN.test(line.slice(1))) continue;
+
+    const change = changes.get(path) ?? { added: 0, removed: 0 };
+    if (line.startsWith("+")) change.added += 1;
+    else change.removed += 1;
+    changes.set(path, change);
+  }
+
+  return changes;
+}
+
 /**
  * Creates review obligations for every prior comment and changed file. Semantic
  * comparison remains reviewer judgment; this typed model prevents omission.
  */
 export function buildReviewEvidence(
   priorReviewComments: PrReviewComment[],
-  changedFiles: ChangedFileTarget[]
+  changedFiles: ChangedFileTarget[],
+  diff?: string
 ): ReviewEvidence {
   const priorFeedback: PriorFeedbackCheck[] = priorReviewComments.map((comment) => ({ comment }));
   const duplicateSimilarity: DuplicateSimilarityCheck[] = changedFiles.map((file) => ({
@@ -154,5 +207,45 @@ export function buildReviewEvidence(
             ? "Workflow content was truncated; inspect the full file manually."
             : null,
     }));
-  return { priorFeedback, duplicateSimilarity, workflowShell };
+  const pythonEntryPointImports: PythonEntryPointImportCheck[] = changedFiles
+    .filter((file) => PYTHON_ENTRY_POINT_PATTERN.test(file.path))
+    .map((file) => ({
+      path: file.path,
+      findings:
+        file.content === undefined || file.content === null
+          ? []
+          : findPythonEntryPointImportFindings(file.path, file.content),
+      unavailableReason:
+        file.content === undefined || file.content === null
+          ? "Python entry-point content was unavailable; inspect imports manually."
+          : file.truncated
+            ? "Python entry-point content was truncated; inspect imports manually."
+            : null,
+    }));
+  const credentialChanges = diff === undefined ? null : collectCredentialRetrievalChanges(diff);
+  const credentialRetrievals: CredentialRetrievalCheck[] = changedFiles
+    .filter((file) => LOGIN_RELATED_PATTERN.test(file.path) || LOGIN_RELATED_PATTERN.test(file.content ?? ""))
+    .map((file) => {
+      const changes = credentialChanges?.get(file.path) ?? { added: 0, removed: 0 };
+      return {
+        path: file.path,
+        addedRetrievals: changes.added,
+        removedRetrievals: changes.removed,
+        unavailableReason:
+          diff === undefined
+            ? "Unified diff was unavailable; compare credential retrieval manually."
+            : file.content === undefined || file.content === null
+              ? "Login-related source content was unavailable; compare credential retrieval manually."
+              : file.truncated
+                ? "Login-related source content was truncated; compare credential retrieval manually."
+                : null,
+      };
+    });
+  return {
+    priorFeedback,
+    duplicateSimilarity,
+    workflowShell,
+    pythonEntryPointImports,
+    credentialRetrievals,
+  };
 }

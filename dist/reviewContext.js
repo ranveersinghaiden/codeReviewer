@@ -140,7 +140,7 @@ export function formatReviewContext(ctx) {
         path: file.path,
         content: file.fullContent,
         truncated: file.truncated,
-    })));
+    })), ctx.diff);
     parts.push(...formatReviewEvidence(evidence, ctx.reviewerFindings));
     if (ctx.isAutofixPr) {
         parts.push("## 🤖 AI_AUTOFIX PR — Additional Verification-Evidence Requirement");

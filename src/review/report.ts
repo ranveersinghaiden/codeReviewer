@@ -1,5 +1,11 @@
 import type { ReviewerFindingRecord } from "./findingsLedger.js";
-import type { DuplicateSimilarityCheck, PriorFeedbackCheck, WorkflowShellCheck } from "./types.js";
+import type {
+  DuplicateSimilarityCheck,
+  CredentialRetrievalCheck,
+  PriorFeedbackCheck,
+  PythonEntryPointImportCheck,
+  WorkflowShellCheck,
+} from "./types.js";
 
 function location(path: string, line: number | null): string {
   return path ? `\`${path}${line === null ? "" : `:${line}`}\`` : "(general)";
@@ -88,6 +94,62 @@ export function formatWorkflowShellMatrix(checks: WorkflowShellCheck[]): string[
     } else {
       const findings = check.findings.map((finding) => `line ${finding.line}: ${finding.message}`).join("<br>");
       lines.push(`| \`${check.path}\` | **FINDINGS** — ${findings} | Reconcile each finding in the ledger |`);
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
+export function formatPythonEntryPointImportMatrix(checks: PythonEntryPointImportCheck[]): string[] {
+  if (checks.length === 0) return [];
+
+  const lines = [
+    "## Mandatory Python Entry-Point Importability Check",
+    "The rows below identify Python entry points that import their own local package absolutely. " +
+      "For every finding, trace the documented clean-checkout invocation through package metadata, bootstrap " +
+      "code, and `PYTHONPATH` setup. Record whether the import resolves without an ambient local installation. " +
+      "Do not execute PR code.",
+    "",
+    "| Python entry point | Static result | Required final-report action |",
+    "| --- | --- | --- |",
+  ];
+  for (const check of checks) {
+    if (check.unavailableReason) {
+      lines.push(`| \`${check.path}\` | **INCOMPLETE** — ${check.unavailableReason} | Inspect manually |`);
+    } else if (check.findings.length === 0) {
+      lines.push(`| \`${check.path}\` | No local absolute package imports | State inspected evidence |`);
+    } else {
+      const findings = check.findings.map((finding) => `line ${finding.line}: ${finding.message}`).join("<br>");
+      lines.push(`| \`${check.path}\` | **FINDINGS** — ${findings} | Trace invocation and reconcile each finding |`);
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
+export function formatCredentialRetrievalMatrix(checks: CredentialRetrievalCheck[]): string[] {
+  if (checks.length === 0) return [];
+
+  const lines = [
+    "## Mandatory Login Credential Retrieval Check",
+    "For every changed login/authentication file below, compare the base-to-head diff and surrounding source to " +
+      "confirm the username/password retrieval mechanism is unchanged. Do not expose credential values in the " +
+      "report. A changed retrieval source, environment variable, property/config key, secret provider, or accessor " +
+      "is a BLOCKER unless the PR explicitly authorizes and validates that migration.",
+    "",
+    "| Login-related file | Static credential-source diff | Required final-report action |",
+    "| --- | --- | --- |",
+  ];
+  for (const check of checks) {
+    if (check.unavailableReason) {
+      lines.push(`| \`${check.path}\` | **INCOMPLETE** — ${check.unavailableReason} | Inspect manually |`);
+    } else if (check.addedRetrievals === 0 && check.removedRetrievals === 0) {
+      lines.push(`| \`${check.path}\` | No credential-source expressions changed | Verify surrounding accessor context |`);
+    } else {
+      lines.push(
+        `| \`${check.path}\` | **FINDINGS** — ${check.addedRetrievals} added / ${check.removedRetrievals} removed ` +
+          "credential-source expression(s) | Reconcile source change as a BLOCKER unless explicitly authorized |"
+      );
     }
   }
   lines.push("");

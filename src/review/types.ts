@@ -26,8 +26,28 @@ export interface WorkflowShellCheck {
   unavailableReason: string | null;
 }
 
+export interface PythonEntryPointImportFinding {
+  line: number;
+  message: string;
+}
+
+export interface PythonEntryPointImportCheck {
+  path: string;
+  findings: PythonEntryPointImportFinding[];
+  unavailableReason: string | null;
+}
+
+export interface CredentialRetrievalCheck {
+  path: string;
+  addedRetrievals: number;
+  removedRetrievals: number;
+  unavailableReason: string | null;
+}
+
 export interface ReviewEvidence {
   priorFeedback: PriorFeedbackCheck[];
   duplicateSimilarity: DuplicateSimilarityCheck[];
   workflowShell: WorkflowShellCheck[];
+  pythonEntryPointImports: PythonEntryPointImportCheck[];
+  credentialRetrievals: CredentialRetrievalCheck[];
 }
